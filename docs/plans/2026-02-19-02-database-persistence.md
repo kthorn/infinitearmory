@@ -8,6 +8,10 @@
 
 **Tech Stack:** Prisma 5, SQLite
 
+**Prerequisite:** Component 1 (Core Infrastructure) must be complete. Verify `package.json`, `tsconfig.json`, and `src/` exist before starting.
+
+**Env file policy:** Prisma CLI reads `DATABASE_URL` from `.env`. The app runtime reads from `.env.local` (which Component 1 already created with `DATABASE_URL=file:./dev.db`). After `prisma init` creates/updates `.env`, ensure it also contains `DATABASE_URL="file:./dev.db"` to match. Do not commit `.env` — it is gitignored by Component 1.
+
 ---
 
 ## Task 1: Install Prisma
@@ -19,8 +23,8 @@
 
 Run:
 ```bash
-npm install prisma --save-dev
-npm install @prisma/client
+npm install prisma@5 --save-dev
+npm install @prisma/client@5
 ```
 
 Expected: prisma in devDependencies, @prisma/client in dependencies.
@@ -34,11 +38,31 @@ npx prisma init --datasource-provider sqlite
 
 Expected: Creates `prisma/schema.prisma` and updates `.env` (or creates it).
 
-**Step 3: Commit**
+**Step 3: Verify `.env` has correct DATABASE_URL**
+
+Ensure `.env` contains:
+```
+DATABASE_URL="file:./dev.db"
+```
+
+If `prisma init` set a different value, update it to match the canonical local path above (must align with `.env.local` from Component 1).
+
+**Step 4: Add SQLite database files to .gitignore**
+
+Append to `.gitignore`:
+```
+# SQLite
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+```
+
+**Step 5: Commit**
 
 Run:
 ```bash
-git add -A && git commit -m "chore: install and initialize prisma"
+git add package.json package-lock.json prisma/schema.prisma .gitignore && git commit -m "chore: install and initialize prisma"
 ```
 
 ---
@@ -129,10 +153,10 @@ Expected: Creates migration file and applies it. SQLite database file created.
 
 Run:
 ```bash
-ls -la prisma/*.db 2>/dev/null || ls -la *.db 2>/dev/null || echo "DB at DATABASE_URL location"
+test -f dev.db && echo "Database exists at dev.db" || { echo "ERROR: Database file not found"; exit 1; }
 ```
 
-Expected: Database file exists (location depends on DATABASE_URL).
+Expected: "Database exists at dev.db".
 
 **Step 3: Commit migration**
 
@@ -280,7 +304,10 @@ async function main() {
 }
 
 main()
-  .catch(console.error)
+  .catch((e) => {
+    console.error(e)
+    process.exit(1)
+  })
   .finally(() => db.$disconnect())
 ```
 
@@ -339,9 +366,10 @@ Add to `package.json` scripts section:
 "db:migrate:deploy": "prisma migrate deploy",
 "db:studio": "prisma studio",
 "db:push": "prisma db push",
-"db:seed": "tsx prisma/seed.ts",
-"postinstall": "prisma generate"
+"postinstall": "prisma generate || true"
 ```
+
+> **Note:** The `|| true` fallback prevents `postinstall` from failing in Docker builds where `npm ci` runs before `prisma/schema.prisma` is copied. The Dockerfile in Component 12 runs `npx prisma generate` explicitly after copying source.
 
 **Step 2: Verify scripts work**
 
@@ -361,7 +389,7 @@ git add package.json && git commit -m "chore: add prisma convenience scripts"
 
 ---
 
-## Task 8: Create Seed Script (Optional Dev Data)
+## Task 8: Create Seed Script
 
 **Files:**
 - Create: `prisma/seed.ts`
@@ -388,7 +416,7 @@ async function main() {
       options: JSON.stringify({
         ruleset: 'dnd5e',
         rarity: 'very_rare',
-        style: 'elegant',
+        style: 'fantasy_art',
       }),
       status: 'done',
       descriptionMd: `# Winterheart
@@ -438,7 +466,23 @@ main()
   .finally(() => prisma.$disconnect())
 ```
 
-**Step 2: Run seed script**
+**Step 2: Add seed configuration to package.json**
+
+Add to `package.json` scripts section:
+```json
+"db:seed": "tsx prisma/seed.ts"
+```
+
+Also add the Prisma seed config to `package.json` (top level, not inside scripts):
+```json
+"prisma": {
+  "seed": "tsx prisma/seed.ts"
+}
+```
+
+This allows `npx prisma db seed` to work in addition to `npm run db:seed`.
+
+**Step 3: Run seed script**
 
 Run:
 ```bash
@@ -452,53 +496,16 @@ Created sample weapon: sample-weapon-001
 Seeding complete!
 ```
 
-**Step 3: Verify with Prisma Studio**
-
-Run:
-```bash
-npm run db:studio
-```
-
-Expected: Prisma Studio opens in browser, shows Weapon table with sample record.
-
 **Step 4: Commit**
 
 Run:
 ```bash
-git add prisma/seed.ts && git commit -m "feat: add database seed script with sample weapon"
+git add prisma/seed.ts package.json && git commit -m "feat: add database seed script with sample weapon"
 ```
 
 ---
 
-## Task 9: Add .gitignore Entries for Database
-
-**Files:**
-- Modify: `.gitignore`
-
-**Step 1: Add SQLite database files to gitignore**
-
-Append to `.gitignore`:
-```
-# SQLite
-*.db
-*.db-journal
-*.db-wal
-*.db-shm
-
-# Prisma
-prisma/dev.db
-```
-
-**Step 2: Commit**
-
-Run:
-```bash
-git add .gitignore && git commit -m "chore: ignore SQLite database files"
-```
-
----
-
-## Task 10: Final Verification
+## Task 9: Final Verification
 
 **Files:** None (verification only)
 
@@ -519,13 +526,6 @@ npm run db:test
 ```
 
 Expected: Test passes.
-
-**Step 3: Final commit**
-
-Run:
-```bash
-git add -A && git commit -m "chore: complete database and persistence setup" --allow-empty
-```
 
 ---
 

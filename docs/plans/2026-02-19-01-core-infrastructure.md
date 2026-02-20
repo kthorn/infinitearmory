@@ -4,9 +4,11 @@
 
 **Goal:** Set up the Next.js project with TypeScript, Tailwind CSS, and validated environment configuration.
 
-**Architecture:** Next.js 14+ App Router with strict TypeScript. Zod-validated environment variables loaded at startup. Tailwind for styling.
+**Architecture:** Next.js App Router with strict TypeScript. Zod-validated environment variables loaded at startup via `src/instrumentation.ts`. Tailwind for styling.
 
-**Tech Stack:** Next.js 14, TypeScript 5, Tailwind CSS 3, Zod, ESLint, Prettier
+**Tech Stack:** Next.js (latest), TypeScript, Tailwind CSS, Zod, ESLint, Prettier
+
+**Note:** Version numbers and config filenames may differ from what's shown below depending on what `create-next-app` generates. Adapt accordingly (e.g., `next.config.ts` vs `next.config.js`, flat ESLint config vs `.eslintrc.json`).
 
 ---
 
@@ -21,12 +23,16 @@
 
 **Step 1: Create Next.js project with App Router**
 
+The working directory already contains `docs/` and `.claude/` directories. Move them aside, scaffold, then restore:
+
 Run:
 ```bash
+mv docs /tmp/weapon-gen-docs && mv .claude /tmp/weapon-gen-claude
 npx create-next-app@latest . --typescript --tailwind --eslint --app --src-dir --import-alias "@/*" --use-npm
+mv /tmp/weapon-gen-docs docs && mv /tmp/weapon-gen-claude .claude
 ```
 
-When prompted, accept defaults. Expected: Project scaffolded with App Router structure.
+When prompted, accept defaults. Expected: Project scaffolded with App Router structure, existing `docs/` and `.claude/` restored.
 
 **Step 2: Verify project runs**
 
@@ -41,7 +47,7 @@ Expected: Server starts at http://localhost:3000, page renders without errors.
 
 Run:
 ```bash
-git init && git add -A && git commit -m "chore: initialize Next.js project with App Router"
+git add -A && git commit -m "chore: initialize Next.js project with App Router"
 ```
 
 Expected: Initial commit created.
@@ -113,14 +119,14 @@ git add tsconfig.json && git commit -m "chore: configure strict TypeScript"
 **Files:**
 - Modify: `package.json`
 
-**Step 1: Install Zod for validation**
+**Step 1: Install Zod and server-only**
 
 Run:
 ```bash
-npm install zod
+npm install zod server-only
 ```
 
-Expected: zod added to dependencies.
+Expected: zod and server-only added to dependencies.
 
 **Step 2: Install development dependencies**
 
@@ -145,7 +151,7 @@ git add package.json package-lock.json && git commit -m "chore: add zod and pret
 **Files:**
 - Create: `.prettierrc`
 - Create: `.prettierignore`
-- Modify: `.eslintrc.json`
+- Modify: ESLint config (`.eslintrc.json` or `eslint.config.mjs`, whichever was generated)
 
 **Step 1: Create .prettierrc**
 
@@ -173,14 +179,34 @@ node_modules
 
 **Step 3: Update ESLint config to use Prettier**
 
-Replace contents of `.eslintrc.json`:
+Check which ESLint config file was generated (`.eslintrc.json` or `eslint.config.mjs`). Modern Next.js uses flat config.
+
+If flat config (`eslint.config.mjs`), `eslint-config-prettier` is already installed from Task 3. Add prettier to the end of the config array:
+
+```js
+import { dirname } from 'path'
+import { fileURLToPath } from 'url'
+import { FlatCompat } from '@eslint/eslintrc'
+import prettier from 'eslint-config-prettier'
+
+const __dirname = dirname(fileURLToPath(import.meta.url))
+const compat = new FlatCompat({ baseDirectory: __dirname })
+
+const eslintConfig = [
+  ...compat.extends('next/core-web-vitals', 'next/typescript'),
+  prettier,
+]
+
+export default eslintConfig
+```
+
+Note: Adapt based on what `create-next-app` actually generated — keep any existing extends and append `prettier` at the end.
+
+If legacy config (`.eslintrc.json`), replace its contents:
 
 ```json
 {
-  "extends": ["next/core-web-vitals", "prettier"],
-  "rules": {
-    "@typescript-eslint/no-unused-vars": ["error", { "argsIgnorePattern": "^_" }]
-  }
+  "extends": ["next/core-web-vitals", "next/typescript", "prettier"]
 }
 ```
 
@@ -223,6 +249,7 @@ git add -A && git commit -m "chore: configure prettier and eslint"
 Create file `src/lib/env.ts`:
 
 ```typescript
+import 'server-only'
 import { z } from 'zod'
 
 const envSchema = z.object({
@@ -302,7 +329,67 @@ TEXT_PROVIDER=openai
 IMAGE_PROVIDER=openai
 ```
 
-**Step 4: Verify env module compiles**
+**Step 4: Create instrumentation file to trigger env validation at startup**
+
+Create file `src/instrumentation.ts`:
+
+```typescript
+export async function register() {
+  // Importing env triggers Zod validation of all environment variables at startup
+  await import('@/lib/env')
+}
+```
+
+This ensures env validation runs when the server starts, not lazily on first import.
+
+**Step 4b: Enable instrumentation hook if needed**
+
+Check the installed Next.js major version:
+
+```bash
+npx next --version
+```
+
+If Next.js < 15, add `experimental.instrumentationHook` to `next.config`. Example for `next.config.ts`:
+
+```ts
+import type { NextConfig } from 'next'
+
+const nextConfig: NextConfig = {
+  experimental: {
+    instrumentationHook: true,
+  },
+}
+
+export default nextConfig
+```
+
+Or for `next.config.js`:
+
+```js
+/** @type {import('next').NextConfig} */
+const nextConfig = {
+  experimental: {
+    instrumentationHook: true,
+  },
+}
+
+module.exports = nextConfig
+```
+
+In Next.js 15+, instrumentation is stable and no config flag is needed.
+
+**Step 5: Add DB files to .gitignore**
+
+Append to `.gitignore`:
+
+```
+# Database
+*.db
+*.db-journal
+```
+
+**Step 6: Verify env module compiles**
 
 Run:
 ```bash
@@ -311,11 +398,24 @@ npx tsc --noEmit
 
 Expected: No type errors.
 
-**Step 5: Commit**
+**Step 6b: Verify instrumentation triggers env validation**
+
+Temporarily set an invalid env value and confirm the server fails at startup:
 
 Run:
 ```bash
-git add src/lib/env.ts .env.example && git commit -m "feat: add zod-validated environment configuration"
+TEXT_PROVIDER=invalid npm run dev
+```
+
+Expected: Server should fail with a Zod validation error about `TEXT_PROVIDER`. If it starts successfully without error, instrumentation is not active — revisit Step 4b to ensure the instrumentation hook is enabled.
+
+After confirming, no cleanup needed (the invalid value was only in that command's env).
+
+**Step 7: Commit**
+
+Run:
+```bash
+git add src/lib/env.ts src/instrumentation.ts .env.example .gitignore next.config.* && git commit -m "feat: add zod-validated environment configuration"
 ```
 
 Note: `.env.local` is gitignored by default.
@@ -510,11 +610,11 @@ git add -A && git commit -m "chore: complete core infrastructure setup" --allow-
 ## Component 1 Complete
 
 **Summary of what was created:**
-- Next.js 14 project with App Router
+- Next.js project with App Router
 - Strict TypeScript configuration
 - Tailwind CSS styling
 - ESLint + Prettier formatting
-- Zod-validated environment variables
+- Zod-validated environment variables (with server-only guard and startup validation via instrumentation)
 - Base types module
 - Project directory structure
 - Placeholder home page

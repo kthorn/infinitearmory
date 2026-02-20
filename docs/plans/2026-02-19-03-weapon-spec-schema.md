@@ -8,6 +8,8 @@
 
 **Tech Stack:** Zod 3
 
+**Prerequisite:** Components 1 and 2 must be complete. Verify `package.json`, `tsconfig.json`, and `src/lib/schemas/.gitkeep` exist before starting.
+
 ---
 
 ## Task 1: Create Rarity Enum Schema
@@ -101,7 +103,7 @@ export const damageTypeSchema = z.enum([
 export type DamageType = z.infer<typeof damageTypeSchema>
 
 export const damageSchema = z.object({
-  dice: z.string().regex(/^\d+d\d+$/, 'Must be in format "XdY" (e.g., "2d6")'),
+  dice: z.string().regex(/^[1-9]\d*d[1-9]\d*$/, 'Must be in format "XdY" where X,Y >= 1 (e.g., "2d6")'),
   type: damageTypeSchema,
 })
 
@@ -202,6 +204,9 @@ export const chargesSchema = z.object({
   current: z.number().int().min(0),
   max: z.number().int().min(1),
   recharge: z.string().min(1), // e.g., "dawn", "long rest", "1d4 at dawn"
+}).refine(({ current, max }) => current <= max, {
+  message: 'current charges cannot exceed max charges',
+  path: ['current'],
 })
 
 export type Charges = z.infer<typeof chargesSchema>
@@ -266,9 +271,9 @@ export const weaponSpecSchema = z.object({
   toHitBonus: z.number().int().min(-5).max(10).optional(),
   damageBonus: z.number().int().min(-5).max(10).optional(),
   charges: chargesSchema.optional(),
-  effects: z.array(effectSchema).default([]),
+  effects: z.array(effectSchema).max(10).default([]),
   rulesText: z.string().min(1).max(2000),
-  tags: z.array(z.string().min(1).max(30)).default([]),
+  tags: z.array(z.string().min(1).max(30)).max(20).default([]),
 })
 
 export type WeaponSpec = z.infer<typeof weaponSpecSchema>
@@ -283,9 +288,9 @@ export const WEAPON_SPEC_SCHEMA_DESCRIPTION = `{
   "toHitBonus": number (optional, -5 to +10),
   "damageBonus": number (optional, -5 to +10),
   "charges": { "current": number, "max": number, "recharge": "string" } (optional),
-  "effects": [{ "trigger": "on_hit" | "on_crit" | "activated" | "passive", "description": "string" }],
+  "effects": [{ "trigger": "on_hit" | "on_crit" | "activated" | "passive" | "on_attune" | "on_roll_1" | "on_roll_20", "description": "string" }] (max 10),
   "rulesText": "string (complete rules text for the item)",
-  "tags": ["string"] (keywords for searching)
+  "tags": ["string"] (max 20, keywords for searching)
 }`
 ```
 
@@ -495,7 +500,7 @@ git add src/lib/schemas/index.ts && git commit -m "feat: add schemas index with 
 
 Run:
 ```bash
-npm install -D vitest @testing-library/react
+npm install -D vitest
 ```
 
 Expected: vitest added to devDependencies.
@@ -506,7 +511,10 @@ Create file `vitest.config.ts`:
 
 ```typescript
 import { defineConfig } from 'vitest/config'
+import { fileURLToPath } from 'url'
 import path from 'path'
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
 export default defineConfig({
   test: {
@@ -535,7 +543,7 @@ Create directory and file `src/lib/schemas/__tests__/weapon-spec.test.ts`:
 
 ```typescript
 import { describe, it, expect } from 'vitest'
-import { weaponSpecSchema, generationOptionsSchema, textGenerationResultSchema } from '../index'
+import { weaponSpecSchema, generationOptionsSchema, textGenerationResultSchema, chargesSchema } from '../index'
 
 describe('weaponSpecSchema', () => {
   it('validates a complete weapon spec', () => {
@@ -602,6 +610,54 @@ describe('weaponSpecSchema', () => {
     const result = weaponSpecSchema.safeParse(invalidWeapon)
     expect(result.success).toBe(false)
   })
+
+  it('rejects effects array exceeding max length', () => {
+    const weapon = {
+      name: 'Overloaded Weapon',
+      rarity: 'rare',
+      weaponType: 'sword',
+      damage: { dice: '1d6', type: 'slashing' },
+      effects: Array.from({ length: 11 }, (_, i) => ({
+        trigger: 'on_hit',
+        description: `Effect ${i}`,
+      })),
+      rulesText: 'Rules text here.',
+    }
+
+    const result = weaponSpecSchema.safeParse(weapon)
+    expect(result.success).toBe(false)
+  })
+
+  it('rejects tags array exceeding max length', () => {
+    const weapon = {
+      name: 'Over-tagged Weapon',
+      rarity: 'common',
+      weaponType: 'sword',
+      damage: { dice: '1d6', type: 'slashing' },
+      tags: Array.from({ length: 21 }, (_, i) => `tag${i}`),
+      rulesText: 'Rules text here.',
+    }
+
+    const result = weaponSpecSchema.safeParse(weapon)
+    expect(result.success).toBe(false)
+  })
+})
+
+describe('chargesSchema', () => {
+  it('validates valid charges', () => {
+    const result = chargesSchema.safeParse({ current: 3, max: 5, recharge: 'dawn' })
+    expect(result.success).toBe(true)
+  })
+
+  it('rejects current > max', () => {
+    const result = chargesSchema.safeParse({ current: 6, max: 5, recharge: 'dawn' })
+    expect(result.success).toBe(false)
+  })
+
+  it('allows current equal to max', () => {
+    const result = chargesSchema.safeParse({ current: 5, max: 5, recharge: 'dawn' })
+    expect(result.success).toBe(true)
+  })
 })
 
 describe('generationOptionsSchema', () => {
@@ -659,7 +715,7 @@ Expected: All tests pass.
 
 Run:
 ```bash
-git add -A && git commit -m "feat: add schema unit tests"
+git add vitest.config.ts src/lib/schemas/__tests__/weapon-spec.test.ts package.json package-lock.json && git commit -m "feat: add schema unit tests"
 ```
 
 ---
@@ -680,7 +736,7 @@ rm -f src/lib/schemas/.gitkeep
 
 Run:
 ```bash
-git add -A && git commit -m "chore: remove .gitkeep from schemas directory"
+git add src/lib/schemas/.gitkeep && git commit -m "chore: remove .gitkeep from schemas directory"
 ```
 
 ---
@@ -706,13 +762,6 @@ npm run test:run
 ```
 
 Expected: All tests pass.
-
-**Step 3: Final commit**
-
-Run:
-```bash
-git add -A && git commit -m "chore: complete weapon spec schema component" --allow-empty
-```
 
 ---
 
