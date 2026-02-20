@@ -6,7 +6,9 @@
 
 **Architecture:** Provider interface pattern with factory functions. Each provider implements a common interface, selected by environment variable. Prompts are extracted to separate modules for maintainability.
 
-**Tech Stack:** OpenAI SDK, Anthropic SDK, Google Generative AI SDK
+**Tech Stack:** OpenAI SDK, Anthropic SDK, Google GenAI SDK
+
+**Prerequisites:** Components 1 (Core Infrastructure — `src/lib/env.ts`) and 3 (Weapon Spec Schema — `src/lib/schemas`) must be completed first.
 
 ---
 
@@ -33,14 +35,14 @@ npm install @anthropic-ai/sdk
 
 Expected: @anthropic-ai/sdk added to dependencies.
 
-**Step 3: Install Google Generative AI SDK**
+**Step 3: Install Google GenAI SDK**
 
 Run:
 ```bash
-npm install @google/generative-ai
+npm install @google/genai
 ```
 
-Expected: @google/generative-ai added to dependencies.
+Expected: @google/genai added to dependencies.
 
 **Step 4: Commit**
 
@@ -75,6 +77,7 @@ export interface TextProvider {
 
 export interface ImageGenerationResult {
   imageData: Buffer
+  mimeType: string
   model: string
   revisedPrompt?: string
 }
@@ -346,13 +349,13 @@ export function createOpenAITextProvider(): TextProvider {
 
   return {
     async generateWeapon(prompt: string, options: GenerationOptions): Promise<TextGenerationResult> {
-      const systemPrompt = buildWeaponPrompt(prompt, options)
+      const weaponPrompt = buildWeaponPrompt(prompt, options)
 
       const response = await client.chat.completions.create({
         model: MODEL,
         messages: [
           { role: 'system', content: 'You are a fantasy RPG game designer. Always respond with valid JSON only.' },
-          { role: 'user', content: systemPrompt },
+          { role: 'user', content: weaponPrompt },
         ],
         response_format: { type: 'json_object' },
         temperature: 0.8,
@@ -678,6 +681,7 @@ export function createOpenAIImageProvider(): ImageProvider {
 
       return {
         imageData: Buffer.from(imageData.b64_json, 'base64'),
+        mimeType: 'image/png',
         model: MODEL,
         revisedPrompt: imageData.revised_prompt,
       }
@@ -714,42 +718,38 @@ git add src/lib/providers/image/openai.ts && git commit -m "feat: add OpenAI ima
 Create file `src/lib/providers/image/gemini.ts`:
 
 ```typescript
-import { GoogleGenerativeAI } from '@google/generative-ai'
+import { GoogleGenAI } from '@google/genai'
 import { env } from '@/lib/env'
 import type { ImageProvider, ImageGenerationResult } from '../types'
 
-const MODEL = 'gemini-2.0-flash-exp-image-generation'
+const MODEL = 'gemini-2.5-flash-image'
 
 export function createGeminiImageProvider(): ImageProvider {
   if (!env.GEMINI_API_KEY) {
     throw new Error('GEMINI_API_KEY is not configured')
   }
 
-  const genAI = new GoogleGenerativeAI(env.GEMINI_API_KEY)
+  const ai = new GoogleGenAI({ apiKey: env.GEMINI_API_KEY })
 
   return {
     async generateImage(prompt: string): Promise<ImageGenerationResult> {
-      const model = genAI.getGenerativeModel({
+      const response = await ai.models.generateContent({
         model: MODEL,
-        generationConfig: {
-          responseModalities: ['image', 'text'],
-        } as never, // Type workaround for image generation config
+        contents: prompt,
       })
 
-      const response = await model.generateContent(prompt)
-      const result = response.response
-
       // Find image part in response
-      const imagePart = result.candidates?.[0]?.content?.parts?.find(
-        (part) => 'inlineData' in part && part.inlineData?.mimeType?.startsWith('image/')
+      const imagePart = response.candidates?.[0]?.content?.parts?.find(
+        (part) => part.inlineData?.mimeType?.startsWith('image/')
       )
 
-      if (!imagePart || !('inlineData' in imagePart) || !imagePart.inlineData?.data) {
+      if (!imagePart?.inlineData?.data) {
         throw new Error('No image data in Gemini response')
       }
 
       return {
         imageData: Buffer.from(imagePart.inlineData.data, 'base64'),
+        mimeType: imagePart.inlineData.mimeType ?? 'image/png',
         model: MODEL,
       }
     },
@@ -882,7 +882,7 @@ Expected: No errors.
 
 Run:
 ```bash
-git add -A && git commit -m "feat: add providers index"
+git add src/lib/providers/index.ts && git rm -f --ignore-unmatch src/lib/providers/.gitkeep && git commit -m "feat: add providers index"
 ```
 
 ---
@@ -913,7 +913,7 @@ Expected: All tests pass.
 
 Run:
 ```bash
-git add -A && git commit -m "chore: complete AI providers component" --allow-empty
+git commit --allow-empty -m "chore: complete AI providers component"
 ```
 
 ---
@@ -928,7 +928,7 @@ git add -A && git commit -m "chore: complete AI providers component" --allow-emp
 - Anthropic text provider (claude-sonnet-4-20250514)
 - JSON repair logic for schema validation failures
 - OpenAI image provider (dall-e-3)
-- Gemini image provider (gemini-2.0-flash-exp)
+- Gemini image provider (gemini-2.5-flash-image)
 - Provider factory functions with env var selection
 
 **Key Usage:**
@@ -945,7 +945,7 @@ const { weaponSpec, descriptionMd, model } = await textProvider.generateWeapon(
 // Image generation
 const imageProvider = getImageProvider()
 const imagePrompt = buildImagePrompt(weaponSpec, 'fantasy_art')
-const { imageData, model: imageModel } = await imageProvider.generateImage(imagePrompt)
+const { imageData, mimeType, model: imageModel } = await imageProvider.generateImage(imagePrompt)
 ```
 
 **Next:** Proceed to Component 6 - Generation Pipeline
