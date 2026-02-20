@@ -1,6 +1,3 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -8,4 +5,34 @@ generator client {
 datasource db {
   provider = "sqlite"
   url      = env("DATABASE_URL")
+}
+
+model Weapon {
+  id            String   @id @default(cuid())
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  // Generation status
+  status        String   @default("queued") // queued|generating_text|generating_image|done|error
+
+  // User input
+  userPrompt    String
+  options       String   // JSON string: { ruleset, rarity, style, etc. }
+
+  // Generated content (nullable until ready)
+  descriptionMd String?  // Flavor text markdown
+  weaponSpec    String?  // JSON string: canonical stat block
+  imageUrl      String?  // S3 URL to generated image
+  imagePrompt   String?  // Prompt used for image generation
+
+  // Metadata
+  textModel     String?  // e.g., "gpt-4", "claude-3"
+  imageModel    String?  // e.g., "dall-e-3", "gemini-pro"
+  promptVersion String   @default("v1") // For reproducibility
+
+  // Error tracking
+  errorMessage  String?
+
+  @@index([status])
+  @@index([createdAt])
 }
