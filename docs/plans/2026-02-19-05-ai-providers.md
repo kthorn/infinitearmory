@@ -113,6 +113,13 @@ git add src/lib/providers/types.ts && git commit -m "feat: add AI provider type 
 **Files:**
 - Create: `src/lib/providers/prompts/weapon-generation.ts`
 
+**Step 0: Create directory**
+
+Run:
+```bash
+mkdir -p src/lib/providers/prompts
+```
+
 **Step 1: Create weapon generation prompt template**
 
 Create file `src/lib/providers/prompts/weapon-generation.ts`:
@@ -182,6 +189,23 @@ Please fix the JSON and return ONLY the corrected JSON object. Ensure:
 5. No comments
 
 Return ONLY the fixed JSON, nothing else.`
+}
+
+/**
+ * Strip markdown code fences from LLM output.
+ * Some models wrap JSON in ```json ... ``` blocks.
+ */
+export function stripCodeFences(text: string): string {
+  let content = text.trim()
+  if (content.startsWith('```json')) {
+    content = content.slice(7)
+  } else if (content.startsWith('```')) {
+    content = content.slice(3)
+  }
+  if (content.endsWith('```')) {
+    content = content.slice(0, -3)
+  }
+  return content.trim()
 }
 ```
 
@@ -308,7 +332,7 @@ git add src/lib/providers/prompts/image-generation.ts && git commit -m "feat: ad
 Create file `src/lib/providers/prompts/index.ts`:
 
 ```typescript
-export { buildWeaponPrompt, buildRepairPrompt } from './weapon-generation'
+export { buildWeaponPrompt, buildRepairPrompt, stripCodeFences } from './weapon-generation'
 export { buildImagePrompt } from './image-generation'
 ```
 
@@ -326,11 +350,19 @@ git add src/lib/providers/prompts/index.ts && git commit -m "feat: add prompts i
 **Files:**
 - Create: `src/lib/providers/text/openai.ts`
 
+**Step 0: Create directory**
+
+Run:
+```bash
+mkdir -p src/lib/providers/text
+```
+
 **Step 1: Create OpenAI text provider**
 
 Create file `src/lib/providers/text/openai.ts`:
 
 ```typescript
+import 'server-only'
 import OpenAI from 'openai'
 import { env } from '@/lib/env'
 import { textGenerationResultSchema } from '@/lib/schemas'
@@ -379,7 +411,7 @@ export function createOpenAITextProvider(): TextProvider {
       const validated = textGenerationResultSchema.safeParse(parsed)
       if (!validated.success) {
         // Try to repair with schema errors
-        const errorMsg = validated.error.errors.map((e) => `${e.path.join('.')}: ${e.message}`).join('; ')
+        const errorMsg = validated.error.issues.map((e) => `${e.path.join('.')}: ${e.message}`).join('; ')
         parsed = await attemptRepair(client, content, errorMsg)
 
         const revalidated = textGenerationResultSchema.safeParse(parsed)
@@ -454,10 +486,11 @@ git add src/lib/providers/text/openai.ts && git commit -m "feat: add OpenAI text
 Create file `src/lib/providers/text/anthropic.ts`:
 
 ```typescript
+import 'server-only'
 import Anthropic from '@anthropic-ai/sdk'
 import { env } from '@/lib/env'
 import { textGenerationResultSchema } from '@/lib/schemas'
-import { buildWeaponPrompt, buildRepairPrompt } from '../prompts'
+import { buildWeaponPrompt, buildRepairPrompt, stripCodeFences } from '../prompts'
 import type { TextProvider, TextGenerationResult } from '../types'
 import type { GenerationOptions } from '@/lib/schemas'
 
@@ -487,18 +520,7 @@ export function createAnthropicTextProvider(): TextProvider {
         throw new Error('No text content in Anthropic response')
       }
 
-      let content = textBlock.text.trim()
-
-      // Strip markdown code fences if present
-      if (content.startsWith('```json')) {
-        content = content.slice(7)
-      } else if (content.startsWith('```')) {
-        content = content.slice(3)
-      }
-      if (content.endsWith('```')) {
-        content = content.slice(0, -3)
-      }
-      content = content.trim()
+      const content = stripCodeFences(textBlock.text)
 
       // Parse and validate JSON
       let parsed: unknown
@@ -510,7 +532,7 @@ export function createAnthropicTextProvider(): TextProvider {
 
       const validated = textGenerationResultSchema.safeParse(parsed)
       if (!validated.success) {
-        const errorMsg = validated.error.errors.map((e) => `${e.path.join('.')}: ${e.message}`).join('; ')
+        const errorMsg = validated.error.issues.map((e) => `${e.path.join('.')}: ${e.message}`).join('; ')
         parsed = await attemptRepair(client, content, errorMsg)
 
         const revalidated = textGenerationResultSchema.safeParse(parsed)
@@ -549,17 +571,7 @@ async function attemptRepair(client: Anthropic, invalidJson: string, error: stri
     throw new Error('No text content in repair response')
   }
 
-  let content = textBlock.text.trim()
-  if (content.startsWith('```json')) {
-    content = content.slice(7)
-  } else if (content.startsWith('```')) {
-    content = content.slice(3)
-  }
-  if (content.endsWith('```')) {
-    content = content.slice(0, -3)
-  }
-
-  return JSON.parse(content.trim())
+  return JSON.parse(stripCodeFences(textBlock.text))
 }
 ```
 
@@ -645,11 +657,19 @@ git add src/lib/providers/text/index.ts && git commit -m "feat: add text provide
 **Files:**
 - Create: `src/lib/providers/image/openai.ts`
 
+**Step 0: Create directory**
+
+Run:
+```bash
+mkdir -p src/lib/providers/image
+```
+
 **Step 1: Create OpenAI image provider**
 
 Create file `src/lib/providers/image/openai.ts`:
 
 ```typescript
+import 'server-only'
 import OpenAI from 'openai'
 import { env } from '@/lib/env'
 import type { ImageProvider, ImageGenerationResult } from '../types'
@@ -718,6 +738,7 @@ git add src/lib/providers/image/openai.ts && git commit -m "feat: add OpenAI ima
 Create file `src/lib/providers/image/gemini.ts`:
 
 ```typescript
+import 'server-only'
 import { GoogleGenAI } from '@google/genai'
 import { env } from '@/lib/env'
 import type { ImageProvider, ImageGenerationResult } from '../types'
@@ -947,5 +968,7 @@ const imageProvider = getImageProvider()
 const imagePrompt = buildImagePrompt(weaponSpec, 'fantasy_art')
 const { imageData, mimeType, model: imageModel } = await imageProvider.generateImage(imagePrompt)
 ```
+
+**Important downstream note:** `descriptionMd` is model-generated and must be sanitized before rendering as HTML. The UI component (Component 8) must use a safe markdown renderer or sanitize the output — never render with `dangerouslySetInnerHTML` without sanitization. Similarly, `mimeType` from `ImageGenerationResult` should be propagated through the storage layer (Component 4) rather than hardcoding `image/png`.
 
 **Next:** Proceed to Component 6 - Generation Pipeline

@@ -8,6 +8,8 @@
 
 **Tech Stack:** Prisma, AI Providers, S3 Storage
 
+**Cross-component note:** This plan passes `mimeType` from `ImageGenerationResult` through to `uploadImage()`. The `StorageUploadParams` interface (Component 4) must include an optional `mimeType?: string` field, and the S3/local upload implementations must use it instead of hardcoding `image/png`.
+
 ---
 
 ## Task 1: Create Retry Utility
@@ -129,7 +131,7 @@ Create file `src/lib/generation/orchestrator.ts`:
 import { db } from '@/lib/db'
 import { getTextProvider, getImageProvider, buildImagePrompt } from '@/lib/providers'
 import { uploadImage } from '@/lib/storage'
-import { generationOptionsSchema } from '@/lib/schemas'
+import { generationOptionsSchema, weaponSpecSchema, styleSchema } from '@/lib/schemas'
 import { WEAPON_STATUS } from '@/types'
 import { withRetry, isTransientError } from './retry'
 import type { GenerationOptions } from '@/lib/schemas'
@@ -187,10 +189,11 @@ export async function generateWeapon({ weaponId, userPrompt, options }: Generate
       }
     )
 
-    // Upload image to storage
+    // Upload image to storage (propagate mimeType from provider)
     const { url: imageUrl } = await uploadImage({
       weaponId,
       imageData: imageResult.imageData,
+      mimeType: imageResult.mimeType,
     })
 
     // Save image results and mark done
@@ -231,12 +234,13 @@ export async function regenerateImage(weaponId: string, style?: string): Promise
     throw new Error(`Weapon has no spec: ${weaponId}`)
   }
 
+  // Validate inputs before mutating status (prevents marking weapon as error on bad input)
+  const weaponSpec = weaponSpecSchema.parse(JSON.parse(weapon.weaponSpec))
+  const options = generationOptionsSchema.parse(JSON.parse(weapon.options))
+  const imageStyle = style ? styleSchema.parse(style) : options.style ?? 'fantasy_art'
+
   try {
     await updateStatus(weaponId, WEAPON_STATUS.GENERATING_IMAGE)
-
-    const weaponSpec = JSON.parse(weapon.weaponSpec)
-    const options = JSON.parse(weapon.options)
-    const imageStyle = style ?? options.style ?? 'fantasy_art'
 
     const imageProvider = getImageProvider()
     const imagePrompt = buildImagePrompt(weaponSpec, imageStyle)
@@ -253,6 +257,7 @@ export async function regenerateImage(weaponId: string, style?: string): Promise
     const { url: imageUrl } = await uploadImage({
       weaponId,
       imageData: imageResult.imageData,
+      mimeType: imageResult.mimeType,
     })
 
     await db.weapon.update({
@@ -286,30 +291,44 @@ export async function rerollWeapon(weaponId: string): Promise<void> {
     throw new Error(`Weapon not found: ${weaponId}`)
   }
 
-  const options = generationOptionsSchema.parse(JSON.parse(weapon.options))
+  try {
+    const options = generationOptionsSchema.parse(JSON.parse(weapon.options))
 
-  // Clear existing results
-  await db.weapon.update({
-    where: { id: weaponId },
-    data: {
-      weaponSpec: null,
-      descriptionMd: null,
-      imageUrl: null,
-      imagePrompt: null,
-      errorMessage: null,
-      status: WEAPON_STATUS.QUEUED,
-    },
-  })
+    // Clear existing results (including model metadata to prevent stale data)
+    await db.weapon.update({
+      where: { id: weaponId },
+      data: {
+        weaponSpec: null,
+        descriptionMd: null,
+        imageUrl: null,
+        imagePrompt: null,
+        textModel: null,
+        imageModel: null,
+        errorMessage: null,
+        status: WEAPON_STATUS.QUEUED,
+      },
+    })
 
-  // Run full pipeline
-  await generateWeapon({
-    weaponId,
-    userPrompt: weapon.userPrompt,
-    options,
-  })
+    // Run full pipeline
+    await generateWeapon({
+      weaponId,
+      userPrompt: weapon.userPrompt,
+      options,
+    })
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+    await db.weapon.update({
+      where: { id: weaponId },
+      data: {
+        status: WEAPON_STATUS.ERROR,
+        errorMessage,
+      },
+    })
+    throw error
+  }
 }
 
-async function updateStatus(weaponId: string, status: string): Promise<void> {
+async function updateStatus(weaponId: string, status: (typeof WEAPON_STATUS)[keyof typeof WEAPON_STATUS]): Promise<void> {
   await db.weapon.update({
     where: { id: weaponId },
     data: { status, errorMessage: null },
@@ -564,7 +583,7 @@ Expected: All tests pass.
 
 Run:
 ```bash
-git add -A && git commit -m "chore: complete generation pipeline component" --allow-empty
+git add -A && git commit -m "chore: complete generation pipeline component"
 ```
 
 ---

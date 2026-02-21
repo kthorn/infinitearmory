@@ -2,11 +2,13 @@
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
-**Goal:** Add simple authentication and rate limiting to protect API endpoints from abuse.
+**Goal:** Add simple authentication and rate limiting to protect the entire app (API and UI routes) from unauthorized access and abuse.
 
 **Architecture:** Basic auth with single shared password. In-memory rate limiting per IP on generation endpoints. Next.js middleware for request interception.
 
 **Tech Stack:** Next.js Middleware, Basic Auth
+
+**Prerequisites:** Components 1 (Core Infrastructure - provides `src/lib/env.ts`, vitest config, `test:run` script) and 7 (API Routes - provides endpoint structure) must be complete.
 
 ---
 
@@ -20,7 +22,9 @@
 Create file `src/lib/auth/basic-auth.ts`:
 
 ```typescript
-import { env } from '@/lib/env'
+// Note: This module is used by Next.js middleware (Edge Runtime).
+// Do NOT import from '@/lib/env' here — it uses 'server-only' which
+// is incompatible with Edge Runtime. Read process.env directly instead.
 
 export interface AuthResult {
   authenticated: boolean
@@ -31,8 +35,10 @@ export interface AuthResult {
  * Verify Basic Auth credentials
  */
 export function verifyBasicAuth(authHeader: string | null): AuthResult {
-  // If no password configured, skip auth
-  if (!env.AUTH_PASSWORD) {
+  const authPassword = process.env.AUTH_PASSWORD
+
+  // If no password configured, skip auth (dev only)
+  if (authPassword == null) {
     return { authenticated: true }
   }
 
@@ -47,9 +53,10 @@ export function verifyBasicAuth(authHeader: string | null): AuthResult {
   try {
     const base64Credentials = authHeader.slice(6)
     const credentials = Buffer.from(base64Credentials, 'base64').toString('utf-8')
-    const [, password] = credentials.split(':')
+    const colonIndex = credentials.indexOf(':')
+    const password = colonIndex !== -1 ? credentials.slice(colonIndex + 1) : ''
 
-    if (password === env.AUTH_PASSWORD) {
+    if (password === authPassword) {
       return { authenticated: true }
     }
 
@@ -119,16 +126,6 @@ export function createRateLimiter(name: string, config: RateLimitConfig) {
   }
   const store = stores.get(name)!
 
-  // Cleanup old entries periodically
-  setInterval(() => {
-    const now = Date.now()
-    for (const [key, entry] of store.entries()) {
-      if (now > entry.resetTime) {
-        store.delete(key)
-      }
-    }
-  }, config.windowMs)
-
   return {
     /**
      * Check if request is allowed
@@ -137,6 +134,16 @@ export function createRateLimiter(name: string, config: RateLimitConfig) {
      */
     check(key: string): { allowed: boolean; remaining: number; resetIn: number } {
       const now = Date.now()
+
+      // Lazy cleanup: remove expired entries on access
+      if (store.size > 1000) {
+        for (const [k, e] of store.entries()) {
+          if (now > e.resetTime) {
+            store.delete(k)
+          }
+        }
+      }
+
       let entry = store.get(key)
 
       // Create new entry or reset if expired
@@ -250,8 +257,8 @@ import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import { verifyBasicAuth, createAuthChallengeHeaders, rateLimiters } from '@/lib/auth'
 
-// Paths that require authentication
-const PROTECTED_PATHS = ['/api/weapons', '/weapons', '/']
+// Public paths that skip authentication
+const PUBLIC_PATHS = ['/api/health']
 
 // Paths that are rate limited (mapped to their limiters)
 const RATE_LIMITED_PATHS: Record<string, keyof typeof rateLimiters> = {
@@ -267,23 +274,20 @@ const DYNAMIC_RATE_LIMITED_PATHS = [
 export function middleware(request: NextRequest) {
   const path = request.nextUrl.pathname
 
-  // Skip auth for health check
-  if (path === '/api/health') {
-    return NextResponse.next()
-  }
-
-  // Check if path requires auth
-  const requiresAuth = PROTECTED_PATHS.some(
+  // Skip auth for public paths
+  const isPublic = PUBLIC_PATHS.some(
     (p) => path === p || path.startsWith(p + '/')
   )
 
-  if (requiresAuth) {
+  if (!isPublic) {
     const authResult = verifyBasicAuth(request.headers.get('authorization'))
 
     if (!authResult.authenticated) {
+      const headers = createAuthChallengeHeaders()
+      headers.set('Content-Type', 'application/json')
       return new NextResponse(JSON.stringify({ error: 'Unauthorized' }), {
         status: 401,
-        headers: createAuthChallengeHeaders(),
+        headers,
       })
     }
   }
@@ -477,27 +481,24 @@ git add src/lib/auth/__tests__/rate-limit.test.ts && git commit -m "feat: add ra
 Create file `src/lib/auth/__tests__/basic-auth.test.ts`:
 
 ```typescript
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { verifyBasicAuth } from '../basic-auth'
 
-// Mock the env module
-vi.mock('@/lib/env', () => ({
-  env: {
-    AUTH_PASSWORD: 'test-password',
-  },
-}))
-
 describe('verifyBasicAuth', () => {
-  it('returns authenticated when no password is configured', async () => {
-    // Temporarily mock no password
-    vi.doMock('@/lib/env', () => ({
-      env: { AUTH_PASSWORD: undefined },
-    }))
+  const originalEnv = process.env
 
-    // Re-import to get mocked version
-    const { verifyBasicAuth: verify } = await import('../basic-auth')
-    // Note: This test is tricky due to module caching
-    // In real tests, you'd use dependency injection or env var mocking
+  beforeEach(() => {
+    process.env = { ...originalEnv, AUTH_PASSWORD: 'test-password' }
+  })
+
+  afterEach(() => {
+    process.env = originalEnv
+  })
+
+  it('returns authenticated when no password is configured', () => {
+    delete process.env.AUTH_PASSWORD
+    const result = verifyBasicAuth(null)
+    expect(result.authenticated).toBe(true)
   })
 
   it('returns not authenticated when header is missing', () => {
@@ -541,7 +542,7 @@ Run:
 npm run test:run
 ```
 
-Expected: All tests pass (some may skip due to env mocking complexity).
+Expected: All tests pass.
 
 **Step 3: Commit**
 
@@ -552,29 +553,20 @@ git add src/lib/auth/__tests__/basic-auth.test.ts && git commit -m "feat: add ba
 
 ---
 
-## Task 7: Update .env.example
+## Task 7: Verify .env.example
 
 **Files:**
-- Modify: `.env.example`
+- Verify: `.env.example`
 
-**Step 1: Add auth documentation**
+**Step 1: Verify AUTH_PASSWORD exists**
 
-Append to `.env.example`:
+`.env.example` should already contain `AUTH_PASSWORD=` (added during Component 1). Verify it is present. If missing, add it under an `# Auth` section and commit:
 
-```bash
-
-# Authentication
-# Set this to enable Basic Auth protection
-# Leave empty to disable auth (not recommended for production)
-AUTH_PASSWORD=your-secure-password-here
-```
-
-**Step 2: Commit**
-
-Run:
 ```bash
 git add .env.example && git commit -m "docs: add auth password to env example"
 ```
+
+No commit needed if already present.
 
 ---
 
@@ -600,11 +592,11 @@ npm run test:run
 
 Expected: All tests pass.
 
-**Step 3: Final commit**
+**Step 3: Final commit (if any uncommitted changes remain)**
 
 Run:
 ```bash
-git add -A && git commit -m "chore: complete auth and rate limiting component" --allow-empty
+git add -A && git diff --cached --quiet || git commit -m "chore: complete auth and rate limiting component"
 ```
 
 ---

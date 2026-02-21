@@ -8,6 +8,27 @@
 
 **Tech Stack:** Next.js App Router, React, Tailwind CSS
 
+**Prerequisites:** Components 3 (WeaponSpec schemas), 6 (Generation pipeline), and 7 (API routes) must be complete. Verify `src/lib/schemas/index.ts`, `src/lib/generation/index.ts`, and `src/lib/api/index.ts` exist before starting.
+
+**Step 0: Install dependencies and configure Tailwind typography**
+
+Run:
+```bash
+npm install react-markdown @tailwindcss/typography
+```
+
+Then add the typography plugin to `src/app/globals.css` by adding `@plugin "@tailwindcss/typography";` after the Tailwind import:
+
+```css
+@import "tailwindcss";
+@plugin "@tailwindcss/typography";
+```
+
+Then commit:
+```bash
+git add package.json package-lock.json src/app/globals.css && git commit -m "chore: install react-markdown and tailwind typography"
+```
+
 ---
 
 ## Task 1: Create Base UI Components
@@ -18,6 +39,7 @@
 - Create: `src/components/ui/select.tsx`
 - Create: `src/components/ui/card.tsx`
 - Create: `src/components/ui/spinner.tsx`
+- Create: `src/components/ui/index.ts`
 
 **Step 1: Create Button component**
 
@@ -25,6 +47,7 @@ Create file `src/components/ui/button.tsx`:
 
 ```typescript
 import { forwardRef, type ButtonHTMLAttributes } from 'react'
+import { Spinner } from './spinner'
 
 interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: 'primary' | 'secondary' | 'ghost'
@@ -56,7 +79,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
         disabled={disabled || loading}
         {...props}
       >
-        {loading && <Spinner className="mr-2 h-4 w-4" />}
+        {loading && <Spinner size="sm" className="mr-2" />}
         {children}
       </button>
     )
@@ -64,19 +87,6 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
 )
 
 Button.displayName = 'Button'
-
-function Spinner({ className = '' }: { className?: string }) {
-  return (
-    <svg className={`animate-spin ${className}`} fill="none" viewBox="0 0 24 24">
-      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-      <path
-        className="opacity-75"
-        fill="currentColor"
-        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-      />
-    </svg>
-  )
-}
 ```
 
 **Step 2: Create Input component**
@@ -84,7 +94,7 @@ function Spinner({ className = '' }: { className?: string }) {
 Create file `src/components/ui/input.tsx`:
 
 ```typescript
-import { forwardRef, type InputHTMLAttributes } from 'react'
+import { forwardRef, useId, type InputHTMLAttributes } from 'react'
 
 interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
   label?: string
@@ -93,7 +103,8 @@ interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
 
 export const Input = forwardRef<HTMLInputElement, InputProps>(
   ({ className = '', label, error, id, ...props }, ref) => {
-    const inputId = id ?? label?.toLowerCase().replace(/\s+/g, '-')
+    const generatedId = useId()
+    const inputId = id ?? generatedId
 
     return (
       <div className="w-full">
@@ -122,7 +133,7 @@ Input.displayName = 'Input'
 Create file `src/components/ui/select.tsx`:
 
 ```typescript
-import { forwardRef, type SelectHTMLAttributes } from 'react'
+import { forwardRef, useId, type SelectHTMLAttributes } from 'react'
 
 interface SelectOption {
   value: string
@@ -137,7 +148,8 @@ interface SelectProps extends SelectHTMLAttributes<HTMLSelectElement> {
 
 export const Select = forwardRef<HTMLSelectElement, SelectProps>(
   ({ className = '', label, options, error, id, ...props }, ref) => {
-    const selectId = id ?? label?.toLowerCase().replace(/\s+/g, '-')
+    const generatedId = useId()
+    const selectId = id ?? generatedId
 
     return (
       <div className="w-full">
@@ -306,7 +318,7 @@ Create file `src/components/weapon-form.tsx`:
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Button, Input, Select, Card, CardContent, CardFooter } from './ui'
+import { Button, Select, Card, CardContent, CardFooter } from './ui'
 import { RULESET_DISPLAY, STYLE_DISPLAY, RARITY_DISPLAY } from '@/lib/schemas'
 
 const rulesetOptions = Object.entries(RULESET_DISPLAY).map(([value, label]) => ({ value, label }))
@@ -543,7 +555,7 @@ export function StatBlock({ spec }: StatBlockProps) {
       <div className="border-b border-amber-700/50 pb-3 mb-4">
         <h2 className="text-2xl font-bold text-amber-100">{spec.name}</h2>
         <p className="text-sm italic text-slate-400">
-          <span className={rarityColor}>{spec.rarity.replace('_', ' ')}</span>
+          <span className={rarityColor}>{spec.rarity.replaceAll('_', ' ')}</span>
           {' '}{spec.weaponType}
           {spec.properties.length > 0 && (
             <span className="text-slate-500">
@@ -562,7 +574,7 @@ export function StatBlock({ spec }: StatBlockProps) {
         </p>
         {spec.toHitBonus !== undefined && (
           <p className="text-slate-300">
-            <span className="font-semibold">Attack Bonus:</span> +{spec.toHitBonus}
+            <span className="font-semibold">Attack Bonus:</span> {spec.toHitBonus >= 0 ? `+${spec.toHitBonus}` : spec.toHitBonus}
           </p>
         )}
       </div>
@@ -635,6 +647,8 @@ git add src/components/stat-block.tsx && git commit -m "feat: add stat block com
 
 ## Task 5: Create Weapon Card Component
 
+> **Note:** This task uses `next/image` with remote URLs. The remote image patterns are configured later in Task 12. Compilation will succeed, but runtime image loading requires Task 12 to be complete.
+
 **Files:**
 - Create: `src/components/weapon-card.tsx`
 
@@ -647,6 +661,7 @@ Create file `src/components/weapon-card.tsx`:
 
 import { useState } from 'react'
 import Image from 'next/image'
+import ReactMarkdown from 'react-markdown'
 import { Button, Card, CardContent, CardFooter } from './ui'
 import { StatBlock } from './stat-block'
 import type { WeaponResponse } from '@/lib/schemas'
@@ -660,13 +675,17 @@ interface WeaponCardProps {
 export function WeaponCard({ weapon, onRegenerateImage, onRerollStats }: WeaponCardProps) {
   const [regeneratingImage, setRegeneratingImage] = useState(false)
   const [rerollingStats, setRerollingStats] = useState(false)
+  const [actionError, setActionError] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState<'stats' | 'lore'>('stats')
 
   async function handleRegenerateImage() {
     if (!onRegenerateImage) return
     setRegeneratingImage(true)
+    setActionError(null)
     try {
       await onRegenerateImage()
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : 'Failed to regenerate image')
     } finally {
       setRegeneratingImage(false)
     }
@@ -675,15 +694,26 @@ export function WeaponCard({ weapon, onRegenerateImage, onRerollStats }: WeaponC
   async function handleRerollStats() {
     if (!onRerollStats) return
     setRerollingStats(true)
+    setActionError(null)
     try {
       await onRerollStats()
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : 'Failed to reroll stats')
     } finally {
       setRerollingStats(false)
     }
   }
 
   if (!weapon.weaponSpec) {
-    return null
+    return (
+      <Card className="max-w-4xl mx-auto">
+        <CardContent>
+          <div className="text-center py-12">
+            <p className="text-slate-400">Weapon data is not available.</p>
+          </div>
+        </CardContent>
+      </Card>
+    )
   }
 
   return (
@@ -738,14 +768,17 @@ export function WeaponCard({ weapon, onRegenerateImage, onRerollStats }: WeaponC
               <StatBlock spec={weapon.weaponSpec} />
             ) : (
               <div className="prose prose-invert prose-sm max-w-none">
-                <div
-                  dangerouslySetInnerHTML={{
-                    __html: weapon.descriptionMd?.replace(/\n/g, '<br />') ?? '',
-                  }}
-                />
+                <ReactMarkdown>{weapon.descriptionMd ?? ''}</ReactMarkdown>
               </div>
             )}
           </CardContent>
+
+          {/* Action Error */}
+          {actionError && (
+            <div className="px-6 py-2 bg-red-900/50 border-t border-red-700 text-red-300 text-sm">
+              {actionError}
+            </div>
+          )}
 
           {/* Actions */}
           {(onRegenerateImage || onRerollStats) && (
@@ -869,7 +902,7 @@ function WeaponListItem({ weapon }: { weapon: WeaponSummary }) {
           {/* Status badge */}
           {isLoading && (
             <div className="absolute top-2 right-2 px-2 py-1 bg-indigo-600 text-white text-xs rounded-full">
-              {weapon.status.replace('_', ' ')}
+              {weapon.status.replaceAll('_', ' ')}
             </div>
           )}
           {weapon.status === 'error' && (
@@ -886,7 +919,7 @@ function WeaponListItem({ weapon }: { weapon: WeaponSummary }) {
           </h3>
           {weapon.rarity && (
             <p className={`text-sm ${rarityColor} capitalize`}>
-              {weapon.rarity.replace('_', ' ')}
+              {weapon.rarity.replaceAll('_', ' ')}
             </p>
           )}
           <p className="text-xs text-slate-500 mt-2 line-clamp-2">{weapon.userPrompt}</p>
@@ -950,11 +983,16 @@ export function useWeaponPolling({
   const [isPolling, setIsPolling] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
+  // Sync state when initialWeapon changes (e.g., navigating to a different weapon, or after reroll/router.refresh)
+  useEffect(() => {
+    setWeapon(initialWeapon)
+  }, [initialWeapon.id, initialWeapon.updatedAt])
+
   const shouldPoll = weapon.status !== 'done' && weapon.status !== 'error'
 
   const fetchWeapon = useCallback(async () => {
     try {
-      const response = await fetch(`/api/weapons/${weapon.id}`)
+      const response = await fetch(`/api/weapons/${weapon.id}`, { cache: 'no-store' })
       if (!response.ok) {
         throw new Error('Failed to fetch weapon')
       }
@@ -973,10 +1011,22 @@ export function useWeaponPolling({
     }
 
     setIsPolling(true)
-    const interval = setInterval(fetchWeapon, pollInterval)
+    let timeoutId: ReturnType<typeof setTimeout> | undefined
+    let cancelled = false
+
+    // Use recursive setTimeout to avoid overlapping requests
+    async function poll() {
+      await fetchWeapon()
+      if (!cancelled) {
+        timeoutId = setTimeout(poll, pollInterval)
+      }
+    }
+
+    poll()
 
     return () => {
-      clearInterval(interval)
+      cancelled = true
+      if (timeoutId) clearTimeout(timeoutId)
       setIsPolling(false)
     }
   }, [shouldPoll, fetchWeapon, pollInterval])
@@ -1184,7 +1234,8 @@ Create file `src/app/weapons/[id]/weapon-detail-client.tsx`:
 'use client'
 
 import { useRouter } from 'next/navigation'
-import { WeaponCard, GenerationProgress } from '@/components'
+import { useState } from 'react'
+import { WeaponCard, GenerationProgress, Button } from '@/components'
 import { useWeaponPolling } from '@/hooks'
 import type { WeaponResponse } from '@/lib/schemas'
 
@@ -1194,35 +1245,66 @@ interface WeaponDetailClientProps {
 
 export function WeaponDetailClient({ initialWeapon }: WeaponDetailClientProps) {
   const router = useRouter()
-  const { weapon, refetch } = useWeaponPolling({ initialWeapon })
+  const { weapon, error: pollingError, refetch } = useWeaponPolling({ initialWeapon })
+  const [retrying, setRetrying] = useState(false)
+  const [retryError, setRetryError] = useState<string | null>(null)
 
   const isGenerating = weapon.status !== 'done' && weapon.status !== 'error'
 
   async function handleRegenerateImage() {
-    await fetch(`/api/weapons/${weapon.id}/regenerate-image`, { method: 'POST' })
+    const response = await fetch(`/api/weapons/${weapon.id}/regenerate-image`, { method: 'POST' })
+    if (!response.ok) {
+      const data = await response.json().catch(() => ({}))
+      throw new Error(data.error || 'Failed to regenerate image')
+    }
     await refetch()
   }
 
   async function handleRerollStats() {
-    await fetch(`/api/weapons/${weapon.id}/reroll-stats`, { method: 'POST' })
+    const response = await fetch(`/api/weapons/${weapon.id}/reroll-stats`, { method: 'POST' })
+    if (!response.ok) {
+      const data = await response.json().catch(() => ({}))
+      throw new Error(data.error || 'Failed to reroll stats')
+    }
     router.refresh()
   }
 
   if (isGenerating) {
-    return <GenerationProgress status={weapon.status} />
+    return (
+      <div>
+        <GenerationProgress status={weapon.status} />
+        {pollingError && (
+          <p className="text-center text-sm text-red-400 mt-4">
+            Having trouble checking status. Retrying...
+          </p>
+        )}
+      </div>
+    )
+  }
+
+  async function handleRetry() {
+    setRetrying(true)
+    setRetryError(null)
+    try {
+      await handleRerollStats()
+    } catch (err) {
+      setRetryError(err instanceof Error ? err.message : 'Retry failed')
+    } finally {
+      setRetrying(false)
+    }
   }
 
   if (weapon.status === 'error') {
     return (
       <div className="text-center py-12">
         <h2 className="text-2xl font-bold text-red-400 mb-4">Generation Failed</h2>
-        <p className="text-slate-400 mb-6">{weapon.errorMessage}</p>
-        <button
-          onClick={handleRerollStats}
-          className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg"
-        >
+        <p className="text-slate-400 mb-6">Something went wrong during generation. Please try again.</p>
+        {retryError && (
+          <p className="text-sm text-red-400 mb-4">{retryError}</p>
+        )}
+        <Button onClick={handleRetry} loading={retrying}>
           Try Again
-        </button>
+        </Button>
       </div>
     )
   }
@@ -1247,6 +1329,8 @@ import Link from 'next/link'
 import { db } from '@/lib/db'
 import { toWeaponResponse } from '@/lib/api'
 import { WeaponDetailClient } from './weapon-detail-client'
+
+export const dynamic = 'force-dynamic'
 
 interface PageProps {
   params: Promise<{ id: string }>
@@ -1300,15 +1384,16 @@ git add src/app/weapons/[id] && git commit -m "feat: add weapon detail page"
 ## Task 12: Update Next.js Config for Images
 
 **Files:**
-- Modify: `next.config.js`
+- Modify: `next.config.ts` (or `next.config.js` — use whichever exists in the repo)
 
 **Step 1: Add remote image patterns**
 
-Replace contents of `next.config.js`:
+Add the `images` key to the existing `nextConfig` object in `next.config.ts`. Do **not** replace the entire file — only add the `images` property:
 
-```javascript
-/** @type {import('next').NextConfig} */
-const nextConfig = {
+```typescript
+// In next.config.ts, add to the nextConfig object:
+const nextConfig: NextConfig = {
+  // ...existing config options...
   images: {
     remotePatterns: [
       {
@@ -1326,15 +1411,13 @@ const nextConfig = {
     ],
   },
 }
-
-module.exports = nextConfig
 ```
 
 **Step 2: Commit**
 
 Run:
 ```bash
-git add next.config.js && git commit -m "feat: configure remote image patterns"
+git add next.config.* && git commit -m "feat: configure remote image patterns"
 ```
 
 ---
@@ -1363,11 +1446,11 @@ Expected: Pages load without errors at:
 - http://localhost:3000 (home with form)
 - http://localhost:3000/weapons (list page)
 
-**Step 3: Final commit**
+**Step 3: Final commit (only if there are unstaged changes)**
 
 Run:
 ```bash
-git add -A && git commit -m "chore: complete UI components" --allow-empty
+git status --porcelain | grep -q . && git add -A && git commit -m "chore: complete UI components" || echo "Nothing to commit"
 ```
 
 ---
