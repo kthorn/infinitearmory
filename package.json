@@ -13,7 +13,8 @@
     "db:migrate:deploy": "prisma migrate deploy",
     "db:studio": "prisma studio",
     "db:push": "prisma db push",
-    "postinstall": "prisma generate || true"
+    "postinstall": "prisma generate || true",
+    "db:seed": "tsx prisma/seed.ts"
   },
   "dependencies": {
     "@prisma/client": "^5.22.0",
@@ -22,6 +23,9 @@
     "react-dom": "19.2.3",
     "server-only": "^0.0.1",
     "zod": "^4.3.6"
+  },
+  "prisma": {
+    "seed": "tsx prisma/seed.ts"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
