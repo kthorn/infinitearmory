@@ -3,7 +3,7 @@ import { generationOptionsSchema } from '../generation-options'
 
 export const createWeaponRequestSchema = z.object({
   prompt: z.string().trim().min(3).max(500),
-  options: generationOptionsSchema.optional(),
+  options: z.optional(generationOptionsSchema),
 }).transform((data) => ({
   ...data,
   options: generationOptionsSchema.parse(data.options ?? {}),

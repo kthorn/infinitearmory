@@ -8,10 +8,10 @@ export const weaponResponseSchema = z.object({
   status: z.enum(['queued', 'generating_text', 'generating_image', 'done', 'error']),
   userPrompt: z.string(),
   options: z.record(z.string(), z.unknown()),
-  weaponSpec: weaponSpecSchema.nullable(),
-  descriptionMd: z.string().nullable(),
-  imageUrl: z.string().nullable(),
-  errorMessage: z.string().nullable(),
+  weaponSpec: z.nullable(weaponSpecSchema),
+  descriptionMd: z.nullable(z.string()),
+  imageUrl: z.nullable(z.string()),
+  errorMessage: z.nullable(z.string()),
 })
 
 export type WeaponResponse = z.infer<typeof weaponResponseSchema>
@@ -21,9 +21,9 @@ export const weaponSummarySchema = z.object({
   createdAt: z.string(),
   status: z.enum(['queued', 'generating_text', 'generating_image', 'done', 'error']),
   userPrompt: z.string(),
-  name: z.string().nullable(), // Extracted from weaponSpec
-  rarity: z.string().nullable(),
-  imageUrl: z.string().nullable(),
+  name: z.nullable(z.string()), // Extracted from weaponSpec
+  rarity: z.nullable(z.string()),
+  imageUrl: z.nullable(z.string()),
 })
 
 export type WeaponSummary = z.infer<typeof weaponSummarySchema>
