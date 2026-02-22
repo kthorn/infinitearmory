@@ -82,7 +82,7 @@ async function attemptRepair(client: OpenAI, model: string, invalidJson: string,
     ],
     response_format: { type: 'json_object' },
     temperature: 0,
-    max_tokens: 2000,
+    max_tokens: 10000,
   })
 
   const content = response.choices[0]?.message?.content

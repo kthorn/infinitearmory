@@ -80,7 +80,7 @@ async function attemptRepair(ai: GoogleGenAI, model: string, invalidJson: string
     config: {
       responseMimeType: 'application/json',
       temperature: 0,
-      maxOutputTokens: 2000,
+      maxOutputTokens: 10000,
       systemInstruction: 'You fix JSON errors. Return only valid JSON.',
     },
   })

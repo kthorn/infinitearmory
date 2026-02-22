@@ -30,7 +30,10 @@ IMPORTANT:
 - Return ONLY valid JSON, no other text
 - All string values must be properly escaped
 - The rulesText should be complete and self-contained
-- Tags should be lowercase, single words or short phrases`
+- Tags should be lowercase, single words or short phrases
+- Keep the ENTIRE response under 4000 characters to ensure valid JSON output
+- Be concise: limit effects to 3-5, keep descriptions to 2-3 short paragraphs, and keep rulesText brief
+- Avoid redundancy between effects and rulesText — rulesText should summarize, not repeat every detail verbatim`
 }
 
 function getRulesetInstructions(ruleset: string): string {

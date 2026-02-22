@@ -75,7 +75,7 @@ async function attemptRepair(client: Anthropic, model: string, invalidJson: stri
 
   const response = await client.messages.create({
     model,
-    max_tokens: 2000,
+    max_tokens: 10000,
     messages: [{ role: 'user', content: repairPrompt }],
     system: 'You fix JSON errors. Return only valid JSON, no other text.',
   })
