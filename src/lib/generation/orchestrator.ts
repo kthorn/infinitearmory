@@ -49,7 +49,7 @@ export async function generateWeapon({ weaponId, userPrompt, options }: Generate
     await updateStatus(weaponId, WEAPON_STATUS.GENERATING_IMAGE)
 
     const imageProvider = getImageProvider(options.imageModel)
-    const imagePrompt = buildImagePrompt(textResult.weaponSpec, options.style)
+    const imagePrompt = buildImagePrompt(textResult.weaponSpec, options.style, userPrompt)
 
     const imageResult = await withRetry(
       () => imageProvider.generateImage(imagePrompt),
@@ -110,7 +110,7 @@ export async function regenerateImage(weaponId: string, style?: string): Promise
 
     const { model: imageModelId } = safeResolveImageProvider(options.imageModel)
     const imageProvider = getImageProvider(imageModelId)
-    const imagePrompt = buildImagePrompt(weaponSpec, imageStyle)
+    const imagePrompt = buildImagePrompt(weaponSpec, imageStyle, weapon.userPrompt)
 
     const imageResult = await withRetry(
       () => imageProvider.generateImage(imagePrompt),
