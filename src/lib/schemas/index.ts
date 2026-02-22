@@ -30,3 +30,6 @@ export type { Ruleset, Style, GenerationOptions } from './generation-options'
 
 export { textGenerationResultSchema, TEXT_GENERATION_SCHEMA_DESCRIPTION } from './generation-result'
 export type { TextGenerationResult } from './generation-result'
+
+// API schemas
+export * from './api'
