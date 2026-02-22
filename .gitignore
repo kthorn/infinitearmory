@@ -42,6 +42,9 @@ yarn-error.log*
 # worktrees
 .worktrees/
 
+# Local uploads (development)
+public/uploads/
+
 # vercel
 .vercel
 
