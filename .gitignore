@@ -39,6 +39,9 @@ yarn-error.log*
 *.db-wal
 *.db-shm
 
+# worktrees
+.worktrees/
+
 # vercel
 .vercel
 
