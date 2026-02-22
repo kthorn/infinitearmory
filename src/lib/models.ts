@@ -28,7 +28,8 @@ export const IMAGE_MODELS = {
     { id: 'gpt-image-1-mini', label: 'GPT Image 1 Mini' },
   ],
   gemini: [
-    { id: 'gemini-2.5-flash-image', label: 'Gemini 2.5 Flash', default: true },
+    { id: 'gemini-2.5-flash-image', label: 'Nano Banana' },
+    { id: 'gemini-3-pro-image-preview', label: 'Nano Banana Pro' },
   ],
 } satisfies Record<string, ModelOption[]>
 
