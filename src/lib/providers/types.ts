@@ -21,5 +21,5 @@ export interface ImageProvider {
   generateImage(prompt: string): Promise<ImageGenerationResult>
 }
 
-export type TextProviderType = 'openai' | 'anthropic'
+export type TextProviderType = 'openai' | 'anthropic' | 'gemini'
 export type ImageProviderType = 'openai' | 'gemini'

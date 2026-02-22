@@ -9,8 +9,8 @@ export type {
 } from './types'
 
 // Factories
-export { getTextProvider, resetTextProvider } from './text'
-export { getImageProvider, resetImageProvider } from './image'
+export { getTextProvider } from './text'
+export { getImageProvider } from './image'
 
 // Prompts
 export { buildWeaponPrompt, buildRepairPrompt, buildImagePrompt } from './prompts'

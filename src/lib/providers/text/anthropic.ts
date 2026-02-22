@@ -6,13 +6,14 @@ import { buildWeaponPrompt, buildRepairPrompt, stripCodeFences } from '../prompt
 import type { TextProvider, TextGenerationResult } from '../types'
 import type { GenerationOptions } from '@/lib/schemas'
 
-const MODEL = 'claude-sonnet-4-20250514'
+const DEFAULT_MODEL = 'claude-sonnet-4-6'
 
-export function createAnthropicTextProvider(): TextProvider {
+export function createAnthropicTextProvider(model?: string): TextProvider {
   if (!env.ANTHROPIC_API_KEY) {
     throw new Error('ANTHROPIC_API_KEY is not configured')
   }
 
+  const activeModel = model ?? DEFAULT_MODEL
   const client = new Anthropic({ apiKey: env.ANTHROPIC_API_KEY })
 
   return {
@@ -20,7 +21,7 @@ export function createAnthropicTextProvider(): TextProvider {
       const userPrompt = buildWeaponPrompt(prompt, options)
 
       const response = await client.messages.create({
-        model: MODEL,
+        model: activeModel,
         max_tokens: 2000,
         messages: [{ role: 'user', content: userPrompt }],
         system:
@@ -34,18 +35,17 @@ export function createAnthropicTextProvider(): TextProvider {
 
       const content = stripCodeFences(textBlock.text)
 
-      // Parse and validate JSON
       let parsed: unknown
       try {
         parsed = JSON.parse(content)
       } catch {
-        parsed = await attemptRepair(client, content, 'Invalid JSON syntax')
+        parsed = await attemptRepair(client, activeModel, content, 'Invalid JSON syntax')
       }
 
       const validated = textGenerationResultSchema.safeParse(parsed)
       if (!validated.success) {
         const errorMsg = validated.error.issues.map((e) => `${e.path.join('.')}: ${e.message}`).join('; ')
-        parsed = await attemptRepair(client, content, errorMsg)
+        parsed = await attemptRepair(client, activeModel, content, errorMsg)
 
         const revalidated = textGenerationResultSchema.safeParse(parsed)
         if (!revalidated.success) {
@@ -55,24 +55,24 @@ export function createAnthropicTextProvider(): TextProvider {
         return {
           weaponSpec: revalidated.data.weaponSpec,
           descriptionMd: revalidated.data.descriptionMd,
-          model: MODEL,
+          model: activeModel,
         }
       }
 
       return {
         weaponSpec: validated.data.weaponSpec,
         descriptionMd: validated.data.descriptionMd,
-        model: MODEL,
+        model: activeModel,
       }
     },
   }
 }
 
-async function attemptRepair(client: Anthropic, invalidJson: string, error: string): Promise<unknown> {
+async function attemptRepair(client: Anthropic, model: string, invalidJson: string, error: string): Promise<unknown> {
   const repairPrompt = buildRepairPrompt(invalidJson, error)
 
   const response = await client.messages.create({
-    model: MODEL,
+    model,
     max_tokens: 2000,
     messages: [{ role: 'user', content: repairPrompt }],
     system: 'You fix JSON errors. Return only valid JSON, no other text.',

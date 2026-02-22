@@ -1,29 +1,27 @@
 import { env } from '@/lib/env'
+import { resolveTextProvider } from '@/lib/models'
 import { createOpenAITextProvider } from './openai'
 import { createAnthropicTextProvider } from './anthropic'
+import { createGeminiTextProvider } from './gemini'
 import type { TextProvider, TextProviderType } from '../types'
 
-let textProvider: TextProvider | null = null
-
-export function getTextProvider(): TextProvider {
-  if (!textProvider) {
-    textProvider = createTextProvider(env.TEXT_PROVIDER as TextProviderType)
+export function getTextProvider(modelId?: string): TextProvider {
+  if (modelId) {
+    const providerType = resolveTextProvider(modelId)
+    return createTextProvider(providerType, modelId)
   }
-  return textProvider
+  return createTextProvider(env.TEXT_PROVIDER as TextProviderType)
 }
 
-function createTextProvider(type: TextProviderType): TextProvider {
+function createTextProvider(type: TextProviderType, model?: string): TextProvider {
   switch (type) {
     case 'openai':
-      return createOpenAITextProvider()
+      return createOpenAITextProvider(model)
     case 'anthropic':
-      return createAnthropicTextProvider()
+      return createAnthropicTextProvider(model)
+    case 'gemini':
+      return createGeminiTextProvider(model)
     default:
       throw new Error(`Unknown text provider: ${type}`)
   }
-}
-
-// For testing
-export function resetTextProvider(): void {
-  textProvider = null
 }

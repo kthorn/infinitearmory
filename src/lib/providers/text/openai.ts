@@ -6,13 +6,14 @@ import { buildWeaponPrompt, buildRepairPrompt } from '../prompts'
 import type { TextProvider, TextGenerationResult } from '../types'
 import type { GenerationOptions } from '@/lib/schemas'
 
-const MODEL = 'gpt-4o'
+const DEFAULT_MODEL = 'gpt-5.2'
 
-export function createOpenAITextProvider(): TextProvider {
+export function createOpenAITextProvider(model?: string): TextProvider {
   if (!env.OPENAI_API_KEY) {
     throw new Error('OPENAI_API_KEY is not configured')
   }
 
+  const activeModel = model ?? DEFAULT_MODEL
   const client = new OpenAI({ apiKey: env.OPENAI_API_KEY })
 
   return {
@@ -20,7 +21,7 @@ export function createOpenAITextProvider(): TextProvider {
       const weaponPrompt = buildWeaponPrompt(prompt, options)
 
       const response = await client.chat.completions.create({
-        model: MODEL,
+        model: activeModel,
         messages: [
           { role: 'system', content: 'You are a fantasy RPG game designer. Always respond with valid JSON only.' },
           { role: 'user', content: weaponPrompt },
@@ -35,20 +36,17 @@ export function createOpenAITextProvider(): TextProvider {
         throw new Error('No content in OpenAI response')
       }
 
-      // Parse and validate JSON
       let parsed: unknown
       try {
         parsed = JSON.parse(content)
       } catch {
-        // Try to repair with a follow-up call
-        parsed = await attemptRepair(client, content, 'Invalid JSON syntax')
+        parsed = await attemptRepair(client, activeModel, content, 'Invalid JSON syntax')
       }
 
       const validated = textGenerationResultSchema.safeParse(parsed)
       if (!validated.success) {
-        // Try to repair with schema errors
         const errorMsg = validated.error.issues.map((e) => `${e.path.join('.')}: ${e.message}`).join('; ')
-        parsed = await attemptRepair(client, content, errorMsg)
+        parsed = await attemptRepair(client, activeModel, content, errorMsg)
 
         const revalidated = textGenerationResultSchema.safeParse(parsed)
         if (!revalidated.success) {
@@ -58,24 +56,24 @@ export function createOpenAITextProvider(): TextProvider {
         return {
           weaponSpec: revalidated.data.weaponSpec,
           descriptionMd: revalidated.data.descriptionMd,
-          model: MODEL,
+          model: activeModel,
         }
       }
 
       return {
         weaponSpec: validated.data.weaponSpec,
         descriptionMd: validated.data.descriptionMd,
-        model: MODEL,
+        model: activeModel,
       }
     },
   }
 }
 
-async function attemptRepair(client: OpenAI, invalidJson: string, error: string): Promise<unknown> {
+async function attemptRepair(client: OpenAI, model: string, invalidJson: string, error: string): Promise<unknown> {
   const repairPrompt = buildRepairPrompt(invalidJson, error)
 
   const response = await client.chat.completions.create({
-    model: MODEL,
+    model,
     messages: [
       { role: 'system', content: 'You fix JSON errors. Return only valid JSON.' },
       { role: 'user', content: repairPrompt },
