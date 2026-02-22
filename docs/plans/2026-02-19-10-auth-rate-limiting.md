@@ -1,4 +1,4 @@
-# Component 9: Auth & Rate Limiting Implementation Plan
+# Component 10: Auth & Rate Limiting Implementation Plan (Deferrable)
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
@@ -601,7 +601,7 @@ git add -A && git diff --cached --quiet || git commit -m "chore: complete auth a
 
 ---
 
-## Component 9 Complete
+## Component 10 Complete
 
 **Summary of what was created:**
 - Basic auth utility with password verification

@@ -1,4 +1,4 @@
-# Component 10: Backup System Implementation Plan
+# Component 11: Backup System Implementation Plan (Deferrable)
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
@@ -783,7 +783,7 @@ git add -A && git commit -m "chore: complete backup system component" --allow-em
 
 ---
 
-## Component 10 Complete
+## Component 11 Complete
 
 **Summary of what was created:**
 - SQLite .backup command wrapper

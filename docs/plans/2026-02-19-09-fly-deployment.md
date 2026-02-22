@@ -1,4 +1,4 @@
-# Component 12: Fly Deployment Implementation Plan
+# Component 9: Fly Deployment Implementation Plan
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
@@ -7,6 +7,8 @@
 **Architecture:** Single Next.js server on Fly.io with persistent volume at /data. SQLite database on volume. Prisma migrations run at deploy time. Secrets managed via Fly.
 
 **Tech Stack:** Fly.io, Docker
+
+**Prerequisites:** Components 7 (API Routes — `/api/health` endpoint), 10 (Auth & Rate Limiting — middleware), and 2 (Database — Prisma migrations) must be implemented before deploying.
 
 ---
 
@@ -63,6 +65,9 @@ primary_region = "sjc"
 
 [build]
   dockerfile = "Dockerfile"
+
+[deploy]
+  release_command = "npx prisma migrate deploy"
 
 [env]
   NODE_ENV = "production"
@@ -138,8 +143,8 @@ FROM node:20-alpine AS runner
 
 WORKDIR /app
 
-# Install SQLite for backup commands
-RUN apk add --no-cache sqlite
+# Install SQLite for backup commands and su-exec for user switching
+RUN apk add --no-cache sqlite su-exec
 
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
@@ -153,23 +158,23 @@ COPY --from=builder /app/public ./public
 COPY --from=builder /app/.next/standalone ./
 COPY --from=builder /app/.next/static ./.next/static
 
-# Copy Prisma files for migrations
+# Copy Prisma files for migrations (needed by release_command)
 COPY --from=builder /app/prisma ./prisma
 COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
 COPY --from=builder /app/node_modules/@prisma ./node_modules/@prisma
+COPY --from=builder /app/node_modules/prisma ./node_modules/prisma
 
-# Create data directory
-RUN mkdir -p /data/backups && chown -R nextjs:nodejs /data
-
-USER nextjs
+# Create data directory (ownership handled at runtime via entrypoint)
+RUN mkdir -p /data/backups
 
 EXPOSE 3000
 
 ENV PORT=3000
 ENV HOSTNAME="0.0.0.0"
 
-# Run migrations then start server
-CMD ["sh", "-c", "npx prisma migrate deploy && node server.js"]
+# Entrypoint: fix volume ownership then drop to non-root
+# Fly mounts the volume as root, so we chown at startup before switching user
+CMD ["sh", "-c", "chown -R nextjs:nodejs /data && exec su-exec nextjs node server.js"]
 ```
 
 **Step 2: Commit**
@@ -242,15 +247,16 @@ git add .dockerignore && git commit -m "chore: add .dockerignore"
 ## Task 5: Update Next.js Config for Standalone
 
 **Files:**
-- Modify: `next.config.js`
+- Modify: `next.config.ts`
 
 **Step 1: Enable standalone output**
 
-Update `next.config.js`:
+Update `next.config.ts`:
 
-```javascript
-/** @type {import('next').NextConfig} */
-const nextConfig = {
+```typescript
+import type { NextConfig } from "next";
+
+const nextConfig: NextConfig = {
   output: 'standalone',
   images: {
     remotePatterns: [
@@ -268,16 +274,16 @@ const nextConfig = {
       },
     ],
   },
-}
+};
 
-module.exports = nextConfig
+export default nextConfig;
 ```
 
 **Step 2: Commit**
 
 Run:
 ```bash
-git add next.config.js && git commit -m "feat: enable standalone output for production"
+git add next.config.ts && git commit -m "feat: enable standalone output for production"
 ```
 
 ---
@@ -307,8 +313,8 @@ if [[ -n $(git status --porcelain) ]]; then
   fi
 fi
 
-# Run type check
-echo "📝 Running type check..."
+# Run build (includes type checking)
+echo "📝 Running build..."
 npm run build
 
 # Deploy to Fly
@@ -368,7 +374,7 @@ Expected: Volume created. This creates a 1GB volume for SQLite.
 Run:
 ```bash
 fly apps list
-fly volumes list
+fly volumes list --app weapon-gen
 ```
 
 Expected: App and volume listed.
@@ -381,24 +387,37 @@ Expected: App and volume listed.
 
 **Step 1: Set required secrets**
 
-Run:
+Use `fly secrets import` to avoid leaking values into shell history:
+
 ```bash
+# Create a temporary secrets file (do NOT commit this)
+cat > /tmp/fly-secrets.env << 'EOF'
 # AI Providers (set the ones you'll use)
-fly secrets set OPENAI_API_KEY=sk-...
-fly secrets set ANTHROPIC_API_KEY=sk-ant-...
+TEXT_PROVIDER=openai
+IMAGE_PROVIDER=openai
+OPENAI_API_KEY=sk-...
+# ANTHROPIC_API_KEY=sk-ant-...
+# GEMINI_API_KEY=...
 
 # S3 Storage
-fly secrets set S3_BUCKET=your-bucket-name
-fly secrets set S3_REGION=us-east-1
-fly secrets set S3_ACCESS_KEY_ID=AKIA...
-fly secrets set S3_SECRET_ACCESS_KEY=...
+S3_BUCKET=your-bucket-name
+S3_REGION=us-east-1
+S3_ACCESS_KEY_ID=AKIA...
+S3_SECRET_ACCESS_KEY=...
 
 # For Cloudflare R2, also set:
-# fly secrets set S3_ENDPOINT=https://accountid.r2.cloudflarestorage.com
-# fly secrets set S3_PUBLIC_URL=https://pub-hash.r2.dev
+# S3_ENDPOINT=https://accountid.r2.cloudflarestorage.com
+# S3_PUBLIC_URL=https://pub-hash.r2.dev
 
 # Authentication
-fly secrets set AUTH_PASSWORD=your-secure-password
+AUTH_PASSWORD=your-secure-password
+EOF
+
+# Import secrets from file
+fly secrets import < /tmp/fly-secrets.env
+
+# Delete the temporary file
+rm /tmp/fly-secrets.env
 ```
 
 **Step 2: Verify secrets**
@@ -524,19 +543,11 @@ fly volumes create weapon_data --region sjc --size 1
 ### 3. Configure Secrets
 
 ```bash
-# AI Providers
-fly secrets set OPENAI_API_KEY=sk-...
-# OR
-fly secrets set ANTHROPIC_API_KEY=sk-ant-...
-
-# S3 Storage
-fly secrets set S3_BUCKET=your-bucket
-fly secrets set S3_REGION=us-east-1
-fly secrets set S3_ACCESS_KEY_ID=...
-fly secrets set S3_SECRET_ACCESS_KEY=...
-
-# Auth
-fly secrets set AUTH_PASSWORD=your-secure-password
+# Create secrets file, fill in values, then import:
+fly secrets import < secrets.env
+# Required: TEXT_PROVIDER, IMAGE_PROVIDER, OPENAI_API_KEY (or ANTHROPIC_API_KEY/GEMINI_API_KEY)
+# Required: S3_BUCKET, S3_REGION, S3_ACCESS_KEY_ID, S3_SECRET_ACCESS_KEY
+# Required: AUTH_PASSWORD
 ```
 
 ### 4. Deploy
@@ -662,16 +673,16 @@ git status
 
 Expected: Working tree clean.
 
-**Step 3: Final commit**
+**Step 3: Commit any remaining changes**
 
-Run:
+Run (only if there are uncommitted changes):
 ```bash
-git add -A && git commit -m "chore: complete Fly deployment component" --allow-empty
+git add -A && git commit -m "chore: complete Fly deployment component"
 ```
 
 ---
 
-## Component 12 Complete
+## Component 9 Complete
 
 **Summary of what was created:**
 - `fly.toml` configuration with health checks
@@ -702,21 +713,4 @@ fly ssh console
 
 ---
 
-## All Components Complete!
-
-You have now completed all 12 component plans:
-
-1. Core Infrastructure
-2. Database & Persistence
-3. WeaponSpec Schema
-4. S3 Storage
-5. AI Providers
-6. Generation Pipeline
-7. API Routes
-8. UI Components
-9. Auth & Rate Limiting
-10. Backup System
-11. Observability
-12. Fly Deployment
-
-The Fantasy Weapon Generator is ready to be implemented!
+**Next Steps:** After deployment, continue with remaining components (Auth & Rate Limiting, Backup System, Observability, S3 Storage) as needed.

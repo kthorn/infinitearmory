@@ -358,10 +358,8 @@ export const RULESET_DISPLAY: Record<Ruleset, string> = {
 export const STYLE_DISPLAY: Record<Style, string> = {
   realistic: 'Realistic',
   fantasy_art: 'Fantasy Art',
-  dark_fantasy: 'Dark Fantasy',
   anime: 'Anime',
   pixel_art: 'Pixel Art',
-  watercolor: 'Watercolor',
 }
 ```
 

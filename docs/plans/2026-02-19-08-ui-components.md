@@ -1,10 +1,12 @@
 # Component 8: UI Components Implementation Plan
 
+**Status:** Refined
+
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
 **Goal:** Build React components for the weapon generator UI including form, progress display, weapon cards, and history.
 
-**Architecture:** React Server Components by default, Client Components where needed (forms, polling). Tailwind CSS for styling. Custom hooks for data fetching and polling.
+**Architecture:** React Server Components by default, Client Components where needed (forms, polling). Tailwind CSS for styling. Server-side data fetching for list/detail pages, custom polling hook for real-time generation status updates.
 
 **Tech Stack:** Next.js App Router, React, Tailwind CSS
 
@@ -105,6 +107,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
   ({ className = '', label, error, id, ...props }, ref) => {
     const generatedId = useId()
     const inputId = id ?? generatedId
+    const errorId = `${inputId}-error`
 
     return (
       <div className="w-full">
@@ -116,10 +119,12 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
         <input
           ref={ref}
           id={inputId}
+          aria-invalid={error ? true : undefined}
+          aria-describedby={error ? errorId : undefined}
           className={`w-full px-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent ${error ? 'border-red-500' : ''} ${className}`}
           {...props}
         />
-        {error && <p className="mt-1 text-sm text-red-400">{error}</p>}
+        {error && <p id={errorId} className="mt-1 text-sm text-red-400">{error}</p>}
       </div>
     )
   }
@@ -150,6 +155,7 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(
   ({ className = '', label, options, error, id, ...props }, ref) => {
     const generatedId = useId()
     const selectId = id ?? generatedId
+    const errorId = `${selectId}-error`
 
     return (
       <div className="w-full">
@@ -161,6 +167,8 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(
         <select
           ref={ref}
           id={selectId}
+          aria-invalid={error ? true : undefined}
+          aria-describedby={error ? errorId : undefined}
           className={`w-full px-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent ${error ? 'border-red-500' : ''} ${className}`}
           {...props}
         >
@@ -170,7 +178,7 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(
             </option>
           ))}
         </select>
-        {error && <p className="mt-1 text-sm text-red-400">{error}</p>}
+        {error && <p id={errorId} className="mt-1 text-sm text-red-400">{error}</p>}
       </div>
     )
   }
@@ -358,8 +366,8 @@ export function WeaponForm() {
       })
 
       if (!response.ok) {
-        const data = await response.json()
-        throw new Error(data.error || 'Failed to create weapon')
+        const data = await response.json().catch(() => null)
+        throw new Error(data?.error || 'Failed to create weapon')
       }
 
       const weapon = await response.json()
@@ -376,8 +384,9 @@ export function WeaponForm() {
       <form onSubmit={handleSubmit}>
         <CardContent className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-slate-300 mb-1">Weapon Concept</label>
+            <label htmlFor="weapon-prompt" className="block text-sm font-medium text-slate-300 mb-1">Weapon Concept</label>
             <textarea
+              id="weapon-prompt"
               value={prompt}
               onChange={(e) => setPrompt(e.target.value)}
               placeholder="Describe your weapon idea... (e.g., 'A sword made of crystallized starlight, wielded by an ancient elven queen')"
@@ -411,7 +420,7 @@ export function WeaponForm() {
           </div>
 
           {error && (
-            <div className="p-3 bg-red-900/50 border border-red-700 rounded-lg text-red-300">
+            <div role="alert" className="p-3 bg-red-900/50 border border-red-700 rounded-lg text-red-300">
               {error}
             </div>
           )}
@@ -741,6 +750,8 @@ export function WeaponCard({ weapon, onRegenerateImage, onRerollStats }: WeaponC
           {/* Tabs */}
           <div className="flex border-b border-slate-700">
             <button
+              type="button"
+              aria-pressed={activeTab === 'stats'}
               onClick={() => setActiveTab('stats')}
               className={`flex-1 px-4 py-3 text-sm font-medium ${
                 activeTab === 'stats'
@@ -751,6 +762,8 @@ export function WeaponCard({ weapon, onRegenerateImage, onRerollStats }: WeaponC
               Stats
             </button>
             <button
+              type="button"
+              aria-pressed={activeTab === 'lore'}
               onClick={() => setActiveTab('lore')}
               className={`flex-1 px-4 py-3 text-sm font-medium ${
                 activeTab === 'lore'
@@ -775,7 +788,7 @@ export function WeaponCard({ weapon, onRegenerateImage, onRerollStats }: WeaponC
 
           {/* Action Error */}
           {actionError && (
-            <div className="px-6 py-2 bg-red-900/50 border-t border-red-700 text-red-300 text-sm">
+            <div role="alert" className="px-6 py-2 bg-red-900/50 border-t border-red-700 text-red-300 text-sm">
               {actionError}
             </div>
           )}
@@ -833,6 +846,8 @@ git add src/components/weapon-card.tsx && git commit -m "feat: add weapon card c
 ---
 
 ## Task 6: Create Weapon List Component
+
+> **Note:** Like Task 5, this task uses `next/image` with remote URLs. Runtime image loading requires Task 12 to be complete.
 
 **Files:**
 - Create: `src/components/weapon-list.tsx`
@@ -990,17 +1005,22 @@ export function useWeaponPolling({
 
   const shouldPoll = weapon.status !== 'done' && weapon.status !== 'error'
 
-  const fetchWeapon = useCallback(async () => {
+  const fetchWeapon = useCallback(async (signal?: AbortSignal) => {
     try {
-      const response = await fetch(`/api/weapons/${weapon.id}`, { cache: 'no-store' })
+      const response = await fetch(`/api/weapons/${weapon.id}`, { cache: 'no-store', signal })
       if (!response.ok) {
         throw new Error('Failed to fetch weapon')
       }
       const data = await response.json()
-      setWeapon(data)
-      setError(null)
+      if (!signal?.aborted) {
+        setWeapon(data)
+        setError(null)
+      }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Unknown error')
+      if (err instanceof DOMException && err.name === 'AbortError') return
+      if (!signal?.aborted) {
+        setError(err instanceof Error ? err.message : 'Unknown error')
+      }
     }
   }, [weapon.id])
 
@@ -1011,13 +1031,13 @@ export function useWeaponPolling({
     }
 
     setIsPolling(true)
+    const controller = new AbortController()
     let timeoutId: ReturnType<typeof setTimeout> | undefined
-    let cancelled = false
 
     // Use recursive setTimeout to avoid overlapping requests
     async function poll() {
-      await fetchWeapon()
-      if (!cancelled) {
+      await fetchWeapon(controller.signal)
+      if (!controller.signal.aborted) {
         timeoutId = setTimeout(poll, pollInterval)
       }
     }
@@ -1025,7 +1045,7 @@ export function useWeaponPolling({
     poll()
 
     return () => {
-      cancelled = true
+      controller.abort()
       if (timeoutId) clearTimeout(timeoutId)
       setIsPolling(false)
     }
@@ -1107,7 +1127,7 @@ git add src/components/index.ts && git commit -m "feat: add components index"
 
 **Step 1: Update home page with weapon form**
 
-Replace contents of `src/app/page.tsx`:
+Update `src/app/page.tsx` with the following (replaces the existing placeholder content):
 
 ```typescript
 import Link from 'next/link'
@@ -1437,20 +1457,18 @@ Expected: Build succeeds.
 
 **Step 2: Run dev server and verify pages**
 
-Run:
-```bash
-npm run dev
-```
+Run `npm run dev` in a separate terminal (or stop it before proceeding to Step 3).
 
 Expected: Pages load without errors at:
 - http://localhost:3000 (home with form)
 - http://localhost:3000/weapons (list page)
+- http://localhost:3000/weapons/<any-id> (detail page — will show 404 if no weapons exist, which is correct)
 
 **Step 3: Final commit (only if there are unstaged changes)**
 
 Run:
 ```bash
-git status --porcelain | grep -q . && git add -A && git commit -m "chore: complete UI components" || echo "Nothing to commit"
+git status --porcelain | grep -q . && git add src/ next.config.* package.json package-lock.json && git commit -m "chore: complete UI components" || echo "Nothing to commit"
 ```
 
 ---
