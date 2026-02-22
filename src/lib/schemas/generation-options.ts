@@ -1,5 +1,9 @@
 import { z } from 'zod'
 import { raritySchema } from './rarity'
+import { getAllTextModels, getAllImageModels } from '../models'
+
+const validTextModelIds = getAllTextModels().map((m) => m.id)
+const validImageModelIds = getAllImageModels().map((m) => m.id)
 
 export const rulesetSchema = z.enum(['dnd5e', 'pathfinder2e', 'generic'])
 
@@ -21,6 +25,8 @@ export const generationOptionsSchema = z.object({
   rarity: raritySchema.optional(), // If not specified, LLM chooses appropriate rarity
   style: styleSchema.default('fantasy_art'),
   seed: z.number().int().optional(), // For reproducibility
+  textModel: z.string().refine((id) => validTextModelIds.includes(id), { message: 'Invalid text model ID' }).optional(),
+  imageModel: z.string().refine((id) => validImageModelIds.includes(id), { message: 'Invalid image model ID' }).optional(),
 })
 
 export type GenerationOptions = z.infer<typeof generationOptionsSchema>
