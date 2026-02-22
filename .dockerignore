@@ -1,0 +1,36 @@
+# Dependencies
+node_modules
+
+# Build outputs
+.next
+out
+
+# Git
+.git
+.gitignore
+
+# IDE
+.vscode
+.idea
+
+# Local env files
+.env
+.env.*
+
+# SQLite databases
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+
+# Test files
+**/__tests__
+**/*.test.ts
+**/*.spec.ts
+coverage
+
+# Misc
+*.md
+!README.md
+.DS_Store
+*.log
