@@ -8,7 +8,7 @@ export function buildImagePrompt(weaponSpec: WeaponSpec, style: Style): string {
 
 A detailed illustration of a fantasy weapon: ${weaponDescription}
 
-The weapon should be shown on a neutral background, centered in frame, with dramatic lighting that highlights its magical properties. High detail, professional quality artwork.`
+The weapon should be shown on a neutral background, centered in frame, with dramatic lighting that highlights its magical properties. High detail, professional quality artwork. Do not include any text.`
 }
 
 function getStyleInstructions(style: Style): string {
