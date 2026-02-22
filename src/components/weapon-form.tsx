@@ -2,8 +2,9 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Button, Select, Card, CardContent, CardFooter } from './ui'
+import { Button, Select, GroupedSelect, Card, CardContent, CardFooter } from './ui'
 import { RULESET_DISPLAY, STYLE_DISPLAY, RARITY_DISPLAY } from '@/lib/schemas'
+import { TEXT_MODELS, IMAGE_MODELS, PROVIDER_DISPLAY, getDefaultTextModel, getDefaultImageModel } from '@/lib/models'
 
 const rulesetOptions = Object.entries(RULESET_DISPLAY).map(([value, label]) => ({ value, label }))
 const styleOptions = Object.entries(STYLE_DISPLAY).map(([value, label]) => ({ value, label }))
@@ -11,6 +12,16 @@ const rarityOptions = [
   { value: '', label: 'Auto (LLM chooses)' },
   ...Object.entries(RARITY_DISPLAY).map(([value, label]) => ({ value, label })),
 ]
+
+const textModelGroups = Object.entries(TEXT_MODELS).map(([provider, models]) => ({
+  label: PROVIDER_DISPLAY[provider] ?? provider,
+  options: models.map((m) => ({ value: m.id, label: m.label })),
+}))
+
+const imageModelGroups = Object.entries(IMAGE_MODELS).map(([provider, models]) => ({
+  label: PROVIDER_DISPLAY[provider] ?? provider,
+  options: models.map((m) => ({ value: m.id, label: m.label })),
+}))
 
 export function WeaponForm() {
   const router = useRouter()
@@ -21,6 +32,8 @@ export function WeaponForm() {
   const [ruleset, setRuleset] = useState('dnd5e')
   const [style, setStyle] = useState('fantasy_art')
   const [rarity, setRarity] = useState('')
+  const [textModel, setTextModel] = useState(getDefaultTextModel())
+  const [imageModel, setImageModel] = useState(getDefaultImageModel())
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -37,6 +50,8 @@ export function WeaponForm() {
             ruleset,
             style,
             ...(rarity && { rarity }),
+            textModel,
+            imageModel,
           },
         }),
       })
@@ -92,6 +107,21 @@ export function WeaponForm() {
               options={rarityOptions}
               value={rarity}
               onChange={(e) => setRarity(e.target.value)}
+            />
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <GroupedSelect
+              label="Text Model"
+              groups={textModelGroups}
+              value={textModel}
+              onChange={(e) => setTextModel(e.target.value)}
+            />
+            <GroupedSelect
+              label="Image Model"
+              groups={imageModelGroups}
+              value={imageModel}
+              onChange={(e) => setImageModel(e.target.value)}
             />
           </div>
 
