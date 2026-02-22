@@ -4,7 +4,7 @@ export interface ModelOption {
   default?: boolean
 }
 
-export const TEXT_MODELS = {
+export const TEXT_MODELS: Record<string, ModelOption[]> = {
   openai: [
     { id: 'gpt-5.2', label: 'GPT-5.2', default: true },
     { id: 'gpt-5', label: 'GPT-5' },
@@ -20,9 +20,9 @@ export const TEXT_MODELS = {
     { id: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash', default: true },
     { id: 'gemini-2.5-pro', label: 'Gemini 2.5 Pro' },
   ],
-} satisfies Record<string, ModelOption[]>
+}
 
-export const IMAGE_MODELS = {
+export const IMAGE_MODELS: Record<string, ModelOption[]> = {
   openai: [
     { id: 'gpt-image-1', label: 'GPT Image 1', default: true },
     { id: 'gpt-image-1-mini', label: 'GPT Image 1 Mini' },
@@ -31,7 +31,7 @@ export const IMAGE_MODELS = {
     { id: 'gemini-2.5-flash-image', label: 'Nano Banana' },
     { id: 'gemini-3-pro-image-preview', label: 'Nano Banana Pro' },
   ],
-} satisfies Record<string, ModelOption[]>
+}
 
 export const PROVIDER_DISPLAY: Record<string, string> = {
   openai: 'OpenAI',

@@ -6,7 +6,7 @@ import type { ImageProvider, ImageProviderType } from '../types'
 
 export function getImageProvider(modelId?: string): ImageProvider {
   if (modelId) {
-    const providerType = resolveImageProvider(modelId)
+    const providerType = resolveImageProvider(modelId) as ImageProviderType
     return createImageProvider(providerType, modelId)
   }
   return createImageProvider(env.IMAGE_PROVIDER as ImageProviderType)

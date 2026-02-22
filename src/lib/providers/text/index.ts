@@ -7,7 +7,7 @@ import type { TextProvider, TextProviderType } from '../types'
 
 export function getTextProvider(modelId?: string): TextProvider {
   if (modelId) {
-    const providerType = resolveTextProvider(modelId)
+    const providerType = resolveTextProvider(modelId) as TextProviderType
     return createTextProvider(providerType, modelId)
   }
   return createTextProvider(env.TEXT_PROVIDER as TextProviderType)
