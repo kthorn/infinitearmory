@@ -19,6 +19,9 @@ const envSchema = z.object({
   S3_ACCESS_KEY_ID: z.string().optional(),
   S3_SECRET_ACCESS_KEY: z.string().optional(),
 
+  // Storage
+  STORAGE_DIR: z.string().min(1).optional(),
+
   // Auth
   AUTH_PASSWORD: z.string().optional(),
 
