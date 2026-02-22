@@ -26,7 +26,7 @@ export function createGeminiTextProvider(model?: string): TextProvider {
         config: {
           responseMimeType: 'application/json',
           temperature: 0.8,
-          maxOutputTokens: 2000,
+          maxOutputTokens: 10000,
           systemInstruction: 'You are a fantasy RPG game designer. Always respond with valid JSON only.',
         },
       })
@@ -39,7 +39,9 @@ export function createGeminiTextProvider(model?: string): TextProvider {
       let parsed: unknown
       try {
         parsed = JSON.parse(stripCodeFences(content))
-      } catch {
+      } catch (e) {
+        console.error(`[gemini] JSON parse failed (model=${activeModel}):`, e instanceof Error ? e.message : e)
+        console.error(`[gemini] Raw LLM response (${content.length} chars):\n${content}`)
         parsed = await attemptRepair(ai, activeModel, content, 'Invalid JSON syntax')
       }
 
@@ -88,5 +90,12 @@ async function attemptRepair(ai: GoogleGenAI, model: string, invalidJson: string
     throw new Error('No content in Gemini repair response')
   }
 
-  return JSON.parse(stripCodeFences(content))
+  const repaired = stripCodeFences(content)
+  try {
+    return JSON.parse(repaired)
+  } catch (e) {
+    console.error(`[gemini] Repair also failed (model=${model}):`, e instanceof Error ? e.message : e)
+    console.error(`[gemini] Repair response (${repaired.length} chars):\n${repaired}`)
+    throw e
+  }
 }

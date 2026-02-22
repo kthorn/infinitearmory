@@ -28,7 +28,7 @@ export function createOpenAITextProvider(model?: string): TextProvider {
         ],
         response_format: { type: 'json_object' },
         temperature: 0.8,
-        max_tokens: 2000,
+        max_tokens: 10000,
       })
 
       const content = response.choices[0]?.message?.content
@@ -39,7 +39,9 @@ export function createOpenAITextProvider(model?: string): TextProvider {
       let parsed: unknown
       try {
         parsed = JSON.parse(content)
-      } catch {
+      } catch (e) {
+        console.error(`[openai] JSON parse failed (model=${activeModel}):`, e instanceof Error ? e.message : e)
+        console.error(`[openai] Raw LLM response (${content.length} chars):\n${content}`)
         parsed = await attemptRepair(client, activeModel, content, 'Invalid JSON syntax')
       }
 
@@ -88,5 +90,11 @@ async function attemptRepair(client: OpenAI, model: string, invalidJson: string,
     throw new Error('No content in repair response')
   }
 
-  return JSON.parse(content)
+  try {
+    return JSON.parse(content)
+  } catch (e) {
+    console.error(`[openai] Repair also failed (model=${model}):`, e instanceof Error ? e.message : e)
+    console.error(`[openai] Repair response (${content.length} chars):\n${content}`)
+    throw e
+  }
 }

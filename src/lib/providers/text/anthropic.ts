@@ -22,7 +22,7 @@ export function createAnthropicTextProvider(model?: string): TextProvider {
 
       const response = await client.messages.create({
         model: activeModel,
-        max_tokens: 2000,
+        max_tokens: 10000,
         messages: [{ role: 'user', content: userPrompt }],
         system:
           'You are a fantasy RPG game designer. Always respond with valid JSON only, no other text or markdown formatting.',
@@ -38,7 +38,9 @@ export function createAnthropicTextProvider(model?: string): TextProvider {
       let parsed: unknown
       try {
         parsed = JSON.parse(content)
-      } catch {
+      } catch (e) {
+        console.error(`[anthropic] JSON parse failed (model=${activeModel}):`, e instanceof Error ? e.message : e)
+        console.error(`[anthropic] Raw LLM response (${content.length} chars):\n${content}`)
         parsed = await attemptRepair(client, activeModel, content, 'Invalid JSON syntax')
       }
 
@@ -83,5 +85,12 @@ async function attemptRepair(client: Anthropic, model: string, invalidJson: stri
     throw new Error('No text content in repair response')
   }
 
-  return JSON.parse(stripCodeFences(textBlock.text))
+  const repaired = stripCodeFences(textBlock.text)
+  try {
+    return JSON.parse(repaired)
+  } catch (e) {
+    console.error(`[anthropic] Repair also failed (model=${model}):`, e instanceof Error ? e.message : e)
+    console.error(`[anthropic] Repair response (${repaired.length} chars):\n${repaired}`)
+    throw e
+  }
 }
