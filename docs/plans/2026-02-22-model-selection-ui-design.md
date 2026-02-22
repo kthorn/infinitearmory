@@ -21,6 +21,8 @@ Add UI elements to the weapon generation form allowing users to choose specific 
 | Anthropic | `claude-sonnet-4-0` | Claude Sonnet 4 | |
 | Anthropic | `claude-sonnet-4-6` | Claude Sonnet 4.6 | yes |
 | Anthropic | `claude-opus-4-6` | Claude Opus 4.6 | |
+| Google | `gemini-2.5-flash` | Gemini 2.5 Flash | |
+| Google | `gemini-2.5-pro` | Gemini 2.5 Pro | |
 
 ### Image Models
 
@@ -49,7 +51,7 @@ Refactor `getTextProvider()` and `getImageProvider()` to accept an optional mode
 - If model ID provided: resolve which provider it belongs to, create provider with that model
 - If omitted: fall back to current `env.TEXT_PROVIDER`/`env.IMAGE_PROVIDER` behavior
 
-Each provider constructor (`createOpenAITextProvider`, `createAnthropicTextProvider`, etc.) accepts an optional `model` parameter instead of using hardcoded `const MODEL`.
+New Gemini text provider (`createGeminiTextProvider`) added using existing `@google/genai` SDK. Each provider constructor (`createOpenAITextProvider`, `createAnthropicTextProvider`, `createGeminiTextProvider`, etc.) accepts an optional `model` parameter instead of using hardcoded `const MODEL`.
 
 Singleton pattern removed — providers are lightweight and created per-request.
 
@@ -97,4 +99,5 @@ Two columns on desktop (`md:grid-cols-2`), stacked on mobile.
 
 - **OpenAI Image**: New `gpt-image-*` models use a different API (`client.images.generate` still works but parameters differ from DALL-E). Need to check if `response_format: 'b64_json'` and `size: '1024x1024'` are supported.
 - **Google Imagen**: Imagen models may use a different API path than Gemini native image gen. Need to verify `@google/genai` SDK support.
+- **Google Text**: Gemini text models use `@google/genai` SDK's `generateContent` with text-only output (same SDK as image provider). Need JSON mode support — Gemini supports `responseMimeType: 'application/json'`.
 - **API Key Validation**: Server should only allow models whose provider has an API key configured. Return clear error if user selects an Anthropic model but `ANTHROPIC_API_KEY` is not set.
