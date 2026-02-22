@@ -3,23 +3,23 @@ import { GoogleGenAI } from '@google/genai'
 import { env } from '@/lib/env'
 import type { ImageProvider, ImageGenerationResult } from '../types'
 
-const MODEL = 'gemini-2.5-flash-image'
+const DEFAULT_MODEL = 'gemini-2.5-flash-image'
 
-export function createGeminiImageProvider(): ImageProvider {
+export function createGeminiImageProvider(model?: string): ImageProvider {
   if (!env.GEMINI_API_KEY) {
     throw new Error('GEMINI_API_KEY is not configured')
   }
 
+  const activeModel = model ?? DEFAULT_MODEL
   const ai = new GoogleGenAI({ apiKey: env.GEMINI_API_KEY })
 
   return {
     async generateImage(prompt: string): Promise<ImageGenerationResult> {
       const response = await ai.models.generateContent({
-        model: MODEL,
+        model: activeModel,
         contents: prompt,
       })
 
-      // Find image part in response
       const imagePart = response.candidates?.[0]?.content?.parts?.find(
         (part) => part.inlineData?.mimeType?.startsWith('image/')
       )
@@ -31,7 +31,7 @@ export function createGeminiImageProvider(): ImageProvider {
       return {
         imageData: Buffer.from(imagePart.inlineData.data, 'base64'),
         mimeType: imagePart.inlineData.mimeType ?? 'image/png',
-        model: MODEL,
+        model: activeModel,
       }
     },
   }
