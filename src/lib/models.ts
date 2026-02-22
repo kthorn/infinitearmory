@@ -20,7 +20,7 @@ export const TEXT_MODELS = {
     { id: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash', default: true },
     { id: 'gemini-2.5-pro', label: 'Gemini 2.5 Pro' },
   ],
-} as const satisfies Record<string, ModelOption[]>
+} satisfies Record<string, ModelOption[]>
 
 export const IMAGE_MODELS = {
   openai: [
@@ -30,7 +30,7 @@ export const IMAGE_MODELS = {
   gemini: [
     { id: 'gemini-2.5-flash-image', label: 'Gemini 2.5 Flash', default: true },
   ],
-} as const satisfies Record<string, ModelOption[]>
+} satisfies Record<string, ModelOption[]>
 
 export const PROVIDER_DISPLAY: Record<string, string> = {
   openai: 'OpenAI',
@@ -40,14 +40,14 @@ export const PROVIDER_DISPLAY: Record<string, string> = {
 
 export function resolveTextProvider(modelId: string): keyof typeof TEXT_MODELS {
   for (const [provider, models] of Object.entries(TEXT_MODELS)) {
-    if (models.some((m) => m.id === modelId)) return provider
+    if (models.some((m) => m.id === modelId)) return provider as keyof typeof TEXT_MODELS
   }
   throw new Error(`Unknown text model: ${modelId}`)
 }
 
 export function resolveImageProvider(modelId: string): keyof typeof IMAGE_MODELS {
   for (const [provider, models] of Object.entries(IMAGE_MODELS)) {
-    if (models.some((m) => m.id === modelId)) return provider
+    if (models.some((m) => m.id === modelId)) return provider as keyof typeof IMAGE_MODELS
   }
   throw new Error(`Unknown image model: ${modelId}`)
 }

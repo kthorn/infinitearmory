@@ -1,5 +1,5 @@
 export { Button } from './button'
 export { Input } from './input'
-export { Select } from './select'
+export { Select, GroupedSelect } from './select'
 export { Card, CardHeader, CardContent, CardFooter } from './card'
 export { Spinner } from './spinner'

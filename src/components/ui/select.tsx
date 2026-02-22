@@ -45,3 +45,53 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(
 )
 
 Select.displayName = 'Select'
+
+export interface SelectOptionGroup {
+  label: string
+  options: SelectOption[]
+}
+
+interface GroupedSelectProps extends SelectHTMLAttributes<HTMLSelectElement> {
+  label?: string
+  groups: SelectOptionGroup[]
+  error?: string
+}
+
+export const GroupedSelect = forwardRef<HTMLSelectElement, GroupedSelectProps>(
+  ({ className = '', label, groups, error, id, ...props }, ref) => {
+    const generatedId = useId()
+    const selectId = id ?? generatedId
+    const errorId = `${selectId}-error`
+
+    return (
+      <div className="w-full">
+        {label && (
+          <label htmlFor={selectId} className="block text-sm font-medium text-slate-300 mb-1">
+            {label}
+          </label>
+        )}
+        <select
+          ref={ref}
+          id={selectId}
+          aria-invalid={error ? true : undefined}
+          aria-describedby={error ? errorId : undefined}
+          className={`w-full px-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent ${error ? 'border-red-500' : ''} ${className}`}
+          {...props}
+        >
+          {groups.map((group) => (
+            <optgroup key={group.label} label={group.label}>
+              {group.options.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </optgroup>
+          ))}
+        </select>
+        {error && <p id={errorId} className="mt-1 text-sm text-red-400">{error}</p>}
+      </div>
+    )
+  }
+)
+
+GroupedSelect.displayName = 'GroupedSelect'
