@@ -78,14 +78,9 @@ export async function generateWeapon({ weaponId, userPrompt, options }: Generate
       },
     })
   } catch (error) {
-    // Mark as error
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error'
-    await db.weapon.update({
-      where: { id: weaponId },
-      data: {
-        status: WEAPON_STATUS.ERROR,
-        errorMessage,
-      },
+    // Delete failed weapon so it doesn't appear in the collection
+    await db.weapon.delete({ where: { id: weaponId } }).catch(() => {
+      // Ignore if already deleted
     })
 
     // Re-throw for logging

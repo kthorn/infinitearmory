@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { Button, Select, GroupedSelect, Card, CardContent, CardFooter } from './ui'
 import { RULESET_DISPLAY, STYLE_DISPLAY, RARITY_DISPLAY } from '@/lib/schemas'
 import { TEXT_MODELS, IMAGE_MODELS, PROVIDER_DISPLAY, getDefaultTextModel, getDefaultImageModel } from '@/lib/models'
@@ -25,10 +25,11 @@ const imageModelGroups = Object.entries(IMAGE_MODELS).map(([provider, models]) =
 
 export function WeaponForm() {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  const [prompt, setPrompt] = useState('')
+  const [prompt, setPrompt] = useState(searchParams.get('prompt') ?? '')
   const [ruleset, setRuleset] = useState('dnd5e')
   const [style, setStyle] = useState('fantasy_art')
   const [rarity, setRarity] = useState('')

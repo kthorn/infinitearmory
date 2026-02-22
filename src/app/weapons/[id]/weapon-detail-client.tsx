@@ -1,7 +1,6 @@
 'use client'
 
 import { useRouter } from 'next/navigation'
-import { useState } from 'react'
 import { WeaponCard, GenerationProgress, Button } from '@/components'
 import { useWeaponPolling } from '@/hooks'
 import type { WeaponResponse } from '@/lib/schemas'
@@ -13,8 +12,6 @@ interface WeaponDetailClientProps {
 export function WeaponDetailClient({ initialWeapon }: WeaponDetailClientProps) {
   const router = useRouter()
   const { weapon, error: pollingError, refetch } = useWeaponPolling({ initialWeapon })
-  const [retrying, setRetrying] = useState(false)
-  const [retryError, setRetryError] = useState<string | null>(null)
 
   const isGenerating = weapon.status !== 'done' && weapon.status !== 'error'
 
@@ -49,27 +46,13 @@ export function WeaponDetailClient({ initialWeapon }: WeaponDetailClientProps) {
     )
   }
 
-  async function handleRetry() {
-    setRetrying(true)
-    setRetryError(null)
-    try {
-      await handleRerollStats()
-    } catch (err) {
-      setRetryError(err instanceof Error ? err.message : 'Retry failed')
-    } finally {
-      setRetrying(false)
-    }
-  }
-
   if (weapon.status === 'error') {
+    const retryUrl = `/?prompt=${encodeURIComponent(weapon.userPrompt)}`
     return (
       <div className="text-center py-12">
         <h2 className="text-2xl font-bold text-red-400 mb-4">Generation Failed</h2>
         <p className="text-slate-400 mb-6">Something went wrong during generation. Please try again.</p>
-        {retryError && (
-          <p className="text-sm text-red-400 mb-4">{retryError}</p>
-        )}
-        <Button onClick={handleRetry} loading={retrying}>
+        <Button onClick={() => router.push(retryUrl)}>
           Try Again
         </Button>
       </div>

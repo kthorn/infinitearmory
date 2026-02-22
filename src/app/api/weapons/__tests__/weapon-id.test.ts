@@ -35,6 +35,8 @@ describe('GET /api/weapons/:id', () => {
       errorMessage: null,
       imagePrompt: null,
       imageModel: null,
+      textModel: null,
+      promptVersion: 'v1',
     }
     vi.mocked(db.weapon.findUnique).mockResolvedValue(mockWeapon)
 

@@ -29,10 +29,12 @@ const baseMockWeapon = {
   errorMessage: null,
   imagePrompt: null,
   imageModel: null,
+  textModel: null,
+  promptVersion: 'v1',
 }
 
 function makeRequest(url: string, options?: RequestInit) {
-  return new NextRequest(new URL(url, 'http://localhost'), options)
+  return new NextRequest(new URL(url, 'http://localhost'), options as never)
 }
 
 describe('POST /api/weapons/:id/reroll-stats', () => {

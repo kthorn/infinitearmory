@@ -20,7 +20,7 @@ vi.mock('@/lib/generation', () => ({
 const { db } = await import('@/lib/db')
 
 function makeRequest(url: string, options?: RequestInit) {
-  return new NextRequest(new URL(url, 'http://localhost'), options)
+  return new NextRequest(new URL(url, 'http://localhost'), options as never)
 }
 
 describe('POST /api/weapons', () => {
@@ -42,6 +42,8 @@ describe('POST /api/weapons', () => {
       errorMessage: null,
       imagePrompt: null,
       imageModel: null,
+      textModel: null,
+      promptVersion: 'v1',
     }
     vi.mocked(db.weapon.create).mockResolvedValue(mockWeapon)
 

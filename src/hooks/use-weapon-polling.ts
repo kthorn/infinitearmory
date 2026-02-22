@@ -33,6 +33,14 @@ export function useWeaponPolling({
   const fetchWeapon = useCallback(async (signal?: AbortSignal) => {
     try {
       const response = await fetch(`/api/weapons/${weapon.id}`, { cache: 'no-store', signal })
+      if (response.status === 404) {
+        // Weapon was deleted (generation failed) — stop polling and mark as error
+        if (!signal?.aborted) {
+          setWeapon(prev => ({ ...prev, status: 'error' as const }))
+          setError('Generation failed')
+        }
+        return
+      }
       if (!response.ok) {
         throw new Error('Failed to fetch weapon')
       }
