@@ -1,5 +1,6 @@
 import { db } from '@/lib/db'
 import { getTextProvider, getImageProvider, buildImagePrompt } from '@/lib/providers'
+import { safeResolveImageProvider } from '@/lib/models'
 import { uploadImage } from '@/lib/storage'
 import { generationOptionsSchema, weaponSpecSchema, styleSchema } from '@/lib/schemas'
 import { WEAPON_STATUS } from '@/types'
@@ -23,7 +24,7 @@ export async function generateWeapon({ weaponId, userPrompt, options }: Generate
     // Step 1: Generate text (description + stats)
     await updateStatus(weaponId, WEAPON_STATUS.GENERATING_TEXT)
 
-    const textProvider = getTextProvider()
+    const textProvider = getTextProvider(options.textModel)
     const textResult = await withRetry(
       () => textProvider.generateWeapon(userPrompt, options),
       {
@@ -47,7 +48,7 @@ export async function generateWeapon({ weaponId, userPrompt, options }: Generate
     // Step 2: Generate image
     await updateStatus(weaponId, WEAPON_STATUS.GENERATING_IMAGE)
 
-    const imageProvider = getImageProvider()
+    const imageProvider = getImageProvider(options.imageModel)
     const imagePrompt = buildImagePrompt(textResult.weaponSpec, options.style)
 
     const imageResult = await withRetry(
@@ -112,7 +113,8 @@ export async function regenerateImage(weaponId: string, style?: string): Promise
   try {
     await updateStatus(weaponId, WEAPON_STATUS.GENERATING_IMAGE)
 
-    const imageProvider = getImageProvider()
+    const { model: imageModelId } = safeResolveImageProvider(options.imageModel)
+    const imageProvider = getImageProvider(imageModelId)
     const imagePrompt = buildImagePrompt(weaponSpec, imageStyle)
 
     const imageResult = await withRetry(
