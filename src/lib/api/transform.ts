@@ -23,6 +23,8 @@ export function toWeaponResponse(weapon: Weapon): WeaponResponse {
     descriptionMd: weapon.descriptionMd,
     imageUrl: weapon.imageUrl,
     errorMessage: weapon.errorMessage,
+    textModel: weapon.textModel ?? null,
+    imageModel: weapon.imageModel ?? null,
   }
 }
 

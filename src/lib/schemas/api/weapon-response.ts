@@ -12,6 +12,8 @@ export const weaponResponseSchema = z.object({
   descriptionMd: z.nullable(z.string()),
   imageUrl: z.nullable(z.string()),
   errorMessage: z.nullable(z.string()),
+  textModel: z.nullable(z.string()),
+  imageModel: z.nullable(z.string()),
 })
 
 export type WeaponResponse = z.infer<typeof weaponResponseSchema>
