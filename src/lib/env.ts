@@ -6,7 +6,7 @@ const envSchema = z.object({
   DATABASE_URL: z.string().default('file:./dev.db'),
 
   // AI Providers
-  TEXT_PROVIDER: z.enum(['openai', 'anthropic']).default('openai'),
+  TEXT_PROVIDER: z.enum(['openai', 'anthropic', 'gemini']).default('openai'),
   IMAGE_PROVIDER: z.enum(['openai', 'gemini']).default('openai'),
   OPENAI_API_KEY: z.string().optional(),
   ANTHROPIC_API_KEY: z.string().optional(),
