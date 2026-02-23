@@ -44,7 +44,8 @@ describe('DELETE /api/weapons/:id', () => {
       textModel: null,
       promptVersion: 'v1',
       activeVersionId: null,
-    })
+      versions: [],
+    } as never)
     vi.mocked(db.weapon.delete).mockResolvedValue({} as any)
 
     const req = makeRequest('http://localhost/api/weapons/test-id')
@@ -72,7 +73,8 @@ describe('DELETE /api/weapons/:id', () => {
       textModel: null,
       promptVersion: 'v1',
       activeVersionId: null,
-    })
+      versions: [],
+    } as never)
     vi.mocked(db.weapon.delete).mockResolvedValue({} as any)
 
     const req = makeRequest('http://localhost/api/weapons/test-id')

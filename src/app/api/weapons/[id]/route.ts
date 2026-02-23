@@ -35,16 +35,28 @@ export async function GET(_request: NextRequest, { params }: RouteParams) {
 export async function DELETE(_request: NextRequest, { params }: RouteParams) {
   try {
     const { id } = await params
-    const weapon = await db.weapon.findUnique({ where: { id } })
+    const weapon = await db.weapon.findUnique({
+      where: { id },
+      include: { versions: { select: { imageUrl: true } } },
+    })
 
     if (!weapon) {
       return notFound('Weapon not found')
     }
 
-    if (weapon.imageUrl) {
-      await deleteImage(weapon.imageUrl)
+    // Collect all unique image URLs from weapon + versions
+    const imageUrls = new Set<string>()
+    if (weapon.imageUrl) imageUrls.add(weapon.imageUrl)
+    for (const version of weapon.versions) {
+      if (version.imageUrl) imageUrls.add(version.imageUrl)
     }
 
+    // Delete all images
+    for (const url of imageUrls) {
+      await deleteImage(url)
+    }
+
+    // Cascade delete handles versions
     await db.weapon.delete({ where: { id } })
 
     return NextResponse.json({ success: true })
