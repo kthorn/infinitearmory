@@ -46,7 +46,7 @@ export function WeaponDetailClient({ initialWeapon }: WeaponDetailClientProps) {
     }
     load()
     return () => { cancelled = true }
-  }, [weapon.id, weapon.status])
+  }, [weapon.id, weapon.status, weapon.activeVersionId])
 
   async function handleRegenerateImage() {
     const response = await fetch(`/api/weapons/${weapon.id}/regenerate-image`, { method: 'POST' })
@@ -64,7 +64,8 @@ export function WeaponDetailClient({ initialWeapon }: WeaponDetailClientProps) {
       const data = await response.json().catch(() => ({}))
       throw new Error(data.error || 'Failed to reroll stats')
     }
-    router.refresh()
+    await refetch()
+    await fetchVersions()
   }
 
   async function handleDelete() {
