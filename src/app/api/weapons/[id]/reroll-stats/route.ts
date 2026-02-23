@@ -27,7 +27,10 @@ export async function POST(_request: NextRequest, { params }: RouteParams) {
     await rerollWeapon(id)
 
     // Return updated weapon
-    const updated = await db.weapon.findUnique({ where: { id } })
+    const updated = await db.weapon.findUnique({
+      where: { id },
+      include: { _count: { select: { versions: true } } },
+    })
     if (!updated) {
       return notFound('Weapon was deleted during reroll')
     }

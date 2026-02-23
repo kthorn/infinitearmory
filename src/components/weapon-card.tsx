@@ -6,18 +6,30 @@ import Image from 'next/image'
 import ReactMarkdown from 'react-markdown'
 import { Button, Card, CardContent, CardFooter } from './ui'
 import { StatBlock } from './stat-block'
-import type { WeaponResponse } from '@/lib/schemas'
+import { VersionStrip } from './version-strip'
+import type { WeaponResponse, WeaponVersion } from '@/lib/schemas'
 import { CATEGORY_DISPLAY, STYLE_DISPLAY } from '@/lib/schemas'
 import { getModelLabel } from '@/lib/models'
 
 interface WeaponCardProps {
   weapon: WeaponResponse
+  versions?: WeaponVersion[]
   onRegenerateImage?: () => Promise<void>
   onRerollStats?: () => Promise<void>
   onDelete?: () => Promise<void>
+  onPromoteVersion?: (versionId: string) => Promise<void>
+  onDeleteVersion?: (versionId: string) => Promise<void>
 }
 
-export function WeaponCard({ weapon, onRegenerateImage, onRerollStats, onDelete }: WeaponCardProps) {
+export function WeaponCard({
+  weapon,
+  versions = [],
+  onRegenerateImage,
+  onRerollStats,
+  onDelete,
+  onPromoteVersion,
+  onDeleteVersion,
+}: WeaponCardProps) {
   const router = useRouter()
   const [regeneratingImage, setRegeneratingImage] = useState(false)
   const [rerollingStats, setRerollingStats] = useState(false)
@@ -265,6 +277,15 @@ export function WeaponCard({ weapon, onRegenerateImage, onRerollStats, onDelete 
         </div>
         <p className="text-xs text-slate-500 italic">&ldquo;{weapon.userPrompt}&rdquo;</p>
       </div>
+      {/* Version history */}
+      {versions.length > 1 && onPromoteVersion && onDeleteVersion && (
+        <VersionStrip
+          versions={versions}
+          activeVersionId={weapon.activeVersionId ?? null}
+          onPromote={onPromoteVersion}
+          onDelete={onDeleteVersion}
+        />
+      )}
     </Card>
   )
 }

@@ -1,5 +1,5 @@
-import type { Weapon } from '@prisma/client'
-import type { WeaponResponse, WeaponSummary } from '@/lib/schemas'
+import type { Weapon, WeaponVersion as WeaponVersionRow } from '@prisma/client'
+import type { WeaponResponse, WeaponSummary, WeaponVersion } from '@/lib/schemas'
 
 function safeJsonParse(value: string | null, fallback: unknown = null): unknown {
   if (!value) return fallback
@@ -46,7 +46,11 @@ function normalizeOptions(raw: unknown): Record<string, unknown> {
   return opts
 }
 
-export function toWeaponResponse(weapon: Weapon): WeaponResponse {
+interface WeaponWithVersionCount {
+  _count?: { versions: number }
+}
+
+export function toWeaponResponse(weapon: Weapon & WeaponWithVersionCount): WeaponResponse {
   return {
     id: weapon.id,
     createdAt: weapon.createdAt.toISOString(),
@@ -60,6 +64,21 @@ export function toWeaponResponse(weapon: Weapon): WeaponResponse {
     errorMessage: weapon.errorMessage,
     textModel: weapon.textModel ?? null,
     imageModel: weapon.imageModel ?? null,
+    activeVersionId: weapon.activeVersionId ?? null,
+    versionCount: weapon._count?.versions ?? 0,
+  }
+}
+
+export function toWeaponVersionResponse(version: WeaponVersionRow): WeaponVersion {
+  return {
+    id: version.id,
+    createdAt: version.createdAt.toISOString(),
+    versionNumber: version.versionNumber,
+    weaponSpec: normalizeWeaponSpec(safeJsonParse(version.weaponSpec)) as WeaponVersion['weaponSpec'],
+    descriptionMd: version.descriptionMd,
+    imageUrl: version.imageUrl,
+    textModel: version.textModel ?? null,
+    imageModel: version.imageModel ?? null,
   }
 }
 

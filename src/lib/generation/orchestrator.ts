@@ -77,6 +77,9 @@ export async function generateWeapon({ weaponId, userPrompt, options }: Generate
         status: WEAPON_STATUS.DONE,
       },
     })
+
+    // Create version snapshot
+    await createVersionAndActivate(weaponId)
   } catch (error) {
     // Delete failed weapon so it doesn't appear in the collection
     await db.weapon.delete({ where: { id: weaponId } }).catch(() => {
@@ -143,6 +146,9 @@ export async function regenerateImage(weaponId: string, style?: string): Promise
         status: WEAPON_STATUS.DONE,
       },
     })
+
+    // Create version snapshot
+    await createVersionAndActivate(weaponId)
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error'
     await db.weapon.update({
@@ -203,6 +209,39 @@ export async function rerollWeapon(weaponId: string): Promise<void> {
     })
     throw error
   }
+}
+
+/**
+ * Create a new version snapshot and set it as active on the weapon.
+ */
+async function createVersionAndActivate(weaponId: string): Promise<void> {
+  const weapon = await db.weapon.findUnique({ where: { id: weaponId } })
+  if (!weapon) return
+
+  // Determine next version number
+  const lastVersion = await db.weaponVersion.findFirst({
+    where: { weaponId },
+    orderBy: { versionNumber: 'desc' },
+  })
+  const versionNumber = (lastVersion?.versionNumber ?? 0) + 1
+
+  const version = await db.weaponVersion.create({
+    data: {
+      weaponId,
+      versionNumber,
+      descriptionMd: weapon.descriptionMd,
+      weaponSpec: weapon.weaponSpec,
+      imageUrl: weapon.imageUrl,
+      imagePrompt: weapon.imagePrompt,
+      textModel: weapon.textModel,
+      imageModel: weapon.imageModel,
+    },
+  })
+
+  await db.weapon.update({
+    where: { id: weaponId },
+    data: { activeVersionId: version.id },
+  })
 }
 
 async function updateStatus(weaponId: string, status: (typeof WEAPON_STATUS)[keyof typeof WEAPON_STATUS]): Promise<void> {
