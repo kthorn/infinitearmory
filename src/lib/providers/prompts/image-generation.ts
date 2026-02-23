@@ -3,7 +3,8 @@ import type { WeaponSpec, Style } from '@/lib/schemas'
 export function buildImagePrompt(weaponSpec: WeaponSpec, style: Style, userPrompt?: string): string {
   const styleInstructions = getStyleInstructions(style)
   const weaponDescription = buildWeaponDescription(weaponSpec)
-  const userVisionSection = userPrompt?.trim() ? `\n\nUser's vision: ${userPrompt.trim()}` : ''
+  const trimmedPrompt = userPrompt?.trim()
+  const userVisionSection = trimmedPrompt ? `\n\nUser's vision: ${trimmedPrompt}` : ''
 
   return `${styleInstructions}${userVisionSection}
 

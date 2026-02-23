@@ -38,6 +38,11 @@ describe('buildImagePrompt', () => {
     expect(result).not.toContain("User's vision:")
   })
 
+  it('omits user vision section when userPrompt is only whitespace', () => {
+    const result = buildImagePrompt(mockWeaponSpec, 'fantasy_art', '   ')
+    expect(result).not.toContain("User's vision:")
+  })
+
   it('still includes style instructions and weapon description', () => {
     const result = buildImagePrompt(mockWeaponSpec, 'dark_fantasy', 'glowing purple dagger')
     expect(result).toContain('Dark fantasy art style')
