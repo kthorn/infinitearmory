@@ -2,9 +2,9 @@ import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import { verifyBasicAuth, createAuthChallengeHeaders, rateLimiters } from '@/lib/auth'
 
-// Auth-required paths: the creation UI and all mutating API endpoints.
-// Everything else (history pages, GET endpoints, health) is public.
-const AUTH_REQUIRED_PATHS = ['/']
+// Auth-required paths: only mutating API endpoints require auth.
+// The creation UI is public; auth is triggered when the user submits.
+const AUTH_REQUIRED_PATHS: string[] = []
 const AUTH_REQUIRED_API = [
   { method: 'POST', pattern: /^\/api\/weapons$/ },
   { method: 'DELETE', pattern: /^\/api\/weapons\/[\w-]+$/ },
