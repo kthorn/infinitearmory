@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { useRouter } from 'next/navigation'
 import Image from 'next/image'
 import ReactMarkdown from 'react-markdown'
 import { Button, Card, CardContent, CardFooter } from './ui'
@@ -17,6 +18,7 @@ interface WeaponCardProps {
 }
 
 export function WeaponCard({ weapon, onRegenerateImage, onRerollStats, onDelete }: WeaponCardProps) {
+  const router = useRouter()
   const [regeneratingImage, setRegeneratingImage] = useState(false)
   const [rerollingStats, setRerollingStats] = useState(false)
   const [deleting, setDeleting] = useState(false)
@@ -82,6 +84,20 @@ export function WeaponCard({ weapon, onRegenerateImage, onRerollStats, onDelete 
     a.download = `${safeName}.json`
     a.click()
     setTimeout(() => URL.revokeObjectURL(url), 100)
+  }
+
+  function handleRemix() {
+    const params = new URLSearchParams()
+    params.set('prompt', weapon.userPrompt)
+    if (weapon.options?.category) params.set('category', String(weapon.options.category))
+    if (weapon.options?.style) params.set('style', String(weapon.options.style))
+    if (weapon.options?.rarity) params.set('rarity', String(weapon.options.rarity))
+    // Use top-level model fields (canonical, set by orchestrator) over options (user input)
+    const textModelId = weapon.textModel ?? (weapon.options?.textModel ? String(weapon.options.textModel) : null)
+    const imageModelId = weapon.imageModel ?? (weapon.options?.imageModel ? String(weapon.options.imageModel) : null)
+    if (textModelId) params.set('textModel', textModelId)
+    if (imageModelId) params.set('imageModel', imageModelId)
+    router.push(`/?${params.toString()}`)
   }
 
   if (!weapon.weaponSpec) {
@@ -201,6 +217,13 @@ export function WeaponCard({ weapon, onRegenerateImage, onRerollStats, onDelete 
                 onClick={handleDownloadJson}
               >
                 Download JSON
+              </Button>
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={handleRemix}
+              >
+                Remix
               </Button>
               {onDelete && (
                 <>
