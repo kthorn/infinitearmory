@@ -1,36 +1,88 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Fantasy Weapon Generator
+
+An AI-powered web app that generates unique fantasy weapons with descriptions, stat blocks, and artwork. Supports multiple AI providers for both text and image generation.
+
+## Features
+
+- **AI-generated weapons** — Provide a concept and get a full weapon with lore, stats, and art
+- **Multiple AI providers** — OpenAI, Anthropic (Claude), and Google Gemini for text; OpenAI and Gemini for images
+- **Configurable options** — Choose category (fantasy, sci-fi, mech, turret), art style, rarity, and models
+- **Voice input** — Describe your weapon concept via microphone
+- **Weapon gallery** — Browse and view all previously generated weapons
+- **Remix & regenerate** — Reroll stats or regenerate artwork for existing weapons
+- **Prompt tracking** — View and download the prompts used for generation
+- **Rate limiting & auth** — Per-IP rate limits and optional password protection
 
 ## Getting Started
 
-First, run the development server:
+### Prerequisites
+
+- Node.js 18+
+- At least one AI provider API key (OpenAI, Anthropic, or Gemini)
+
+### Setup
 
 ```bash
+# Install dependencies
+npm install
+
+# Copy environment config
+cp .env.example .env
+
+# Set up the database
+npx prisma migrate dev
+
+# Start the dev server
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3000](http://localhost:3000) to start generating weapons.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+### Environment Variables
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `DATABASE_URL` | SQLite connection string | `file:./dev.db` |
+| `TEXT_PROVIDER` | Text generation provider (`openai`, `anthropic`, `gemini`) | `openai` |
+| `IMAGE_PROVIDER` | Image generation provider (`openai`, `gemini`) | `openai` |
+| `OPENAI_API_KEY` | OpenAI API key | — |
+| `ANTHROPIC_API_KEY` | Anthropic API key | — |
+| `GEMINI_API_KEY` | Google Gemini API key | — |
+| `AUTH_PASSWORD` | Password for protected endpoints | — |
+| `S3_BUCKET` | S3 bucket for image storage (optional) | — |
+| `STORAGE_DIR` | Local image storage path override | `./public/uploads` |
 
-## Learn More
+See `.env.example` for the full list.
 
-To learn more about Next.js, take a look at the following resources:
+## Tech Stack
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+- **Framework** — [Next.js](https://nextjs.org) (App Router)
+- **Database** — SQLite via [Prisma](https://www.prisma.io)
+- **Styling** — [Tailwind CSS](https://tailwindcss.com)
+- **Validation** — [Zod](https://zod.dev)
+- **Testing** — [Vitest](https://vitest.dev) + Testing Library
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Project Structure
 
-## Deploy on Vercel
+```
+src/
+├── app/                    # Pages and API routes
+│   ├── page.tsx            # Weapon creation form
+│   ├── weapons/            # Gallery and detail pages
+│   └── api/                # REST endpoints
+├── components/             # React components
+├── lib/
+│   ├── providers/          # AI provider integrations
+│   │   ├── text/           # Text generation (OpenAI, Claude, Gemini)
+│   │   ├── image/          # Image generation (OpenAI, Gemini)
+│   │   └── prompts/        # Prompt templates
+│   ├── auth/               # Authentication & rate limiting
+│   ├── generation/         # Background job orchestration
+│   ├── storage/            # S3 & local file storage
+│   └── schemas/            # Zod validation schemas
+└── types/                  # TypeScript type definitions
+```
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## License
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+[MIT](LICENSE)
