@@ -6,7 +6,8 @@ import ReactMarkdown from 'react-markdown'
 import { Button, Card, CardContent, CardFooter } from './ui'
 import { StatBlock } from './stat-block'
 import type { WeaponResponse } from '@/lib/schemas'
-import { CATEGORY_DISPLAY } from '@/lib/schemas'
+import { CATEGORY_DISPLAY, STYLE_DISPLAY } from '@/lib/schemas'
+import { getModelLabel } from '@/lib/models'
 
 interface WeaponCardProps {
   weapon: WeaponResponse
@@ -191,6 +192,24 @@ export function WeaponCard({ weapon, onRegenerateImage, onRerollStats, onDelete 
             </CardFooter>
           )}
         </div>
+      </div>
+      {/* Generation metadata */}
+      <div className="px-4 py-2 bg-slate-800/50 border-b border-slate-700 flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-400">
+        {weapon.textModel && (
+          <span title="Text model">
+            <span className="text-slate-500">Text:</span> {getModelLabel(weapon.textModel)}
+          </span>
+        )}
+        {weapon.imageModel && (
+          <span title="Image model">
+            <span className="text-slate-500">Image:</span> {getModelLabel(weapon.imageModel)}
+          </span>
+        )}
+        {typeof weapon.options?.style === 'string' && (
+          <span title="Art style">
+            <span className="text-slate-500">Style:</span> {STYLE_DISPLAY[weapon.options.style as keyof typeof STYLE_DISPLAY] ?? weapon.options.style}
+          </span>
+        )}
       </div>
     </Card>
   )
