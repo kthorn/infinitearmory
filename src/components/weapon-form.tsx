@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { Button, Select, GroupedSelect, Card, CardContent, CardFooter } from './ui'
+import { MicrophoneButton } from './microphone-button'
 import { RULESET_DISPLAY, STYLE_DISPLAY, RARITY_DISPLAY } from '@/lib/schemas'
 import { TEXT_MODELS, IMAGE_MODELS, PROVIDER_DISPLAY, getDefaultTextModel, getDefaultImageModel } from '@/lib/models'
 
@@ -77,17 +78,30 @@ export function WeaponForm() {
         <CardContent className="space-y-4">
           <div>
             <label htmlFor="weapon-prompt" className="block text-sm font-medium text-slate-300 mb-1">Weapon Concept</label>
-            <textarea
-              id="weapon-prompt"
-              value={prompt}
-              onChange={(e) => setPrompt(e.target.value)}
-              placeholder="Describe your weapon idea... (e.g., 'A sword made of crystallized starlight, wielded by an ancient elven queen')"
-              className="w-full px-4 py-3 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent min-h-[100px] resize-y"
-              required
-              minLength={3}
-              maxLength={500}
-            />
-            <p className="mt-1 text-sm text-slate-500">{prompt.length}/500 characters</p>
+            <div className="relative">
+              <textarea
+                id="weapon-prompt"
+                value={prompt}
+                onChange={(e) => setPrompt(e.target.value)}
+                placeholder="Describe your weapon idea... (e.g., 'A sword made of crystallized starlight, wielded by an ancient elven queen')"
+                className="w-full px-4 py-3 pb-10 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent min-h-[100px] resize-y"
+                required
+                minLength={3}
+                maxLength={2000}
+              />
+              <div className="absolute bottom-2 right-2">
+                <MicrophoneButton
+                  onTranscription={(text) => {
+                    setPrompt((prev) => {
+                      const combined = prev ? `${prev} ${text}` : text
+                      return combined.slice(0, 2000)
+                    })
+                  }}
+                  disabled={loading}
+                />
+              </div>
+            </div>
+            <p className="mt-1 text-sm text-slate-500">{prompt.length}/2000 characters</p>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
