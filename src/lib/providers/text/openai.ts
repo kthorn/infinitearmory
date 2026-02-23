@@ -28,7 +28,7 @@ export function createOpenAITextProvider(model?: string): TextProvider {
         ],
         response_format: { type: 'json_object' },
         temperature: 0.8,
-        max_tokens: 10000,
+        max_completion_tokens: 10000,
       })
 
       const content = response.choices[0]?.message?.content
@@ -82,7 +82,7 @@ async function attemptRepair(client: OpenAI, model: string, invalidJson: string,
     ],
     response_format: { type: 'json_object' },
     temperature: 0,
-    max_tokens: 10000,
+    max_completion_tokens: 10000,
   })
 
   const content = response.choices[0]?.message?.content

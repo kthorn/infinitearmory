@@ -5,16 +5,16 @@ export interface ModelOption {
 }
 
 export const TEXT_MODELS: Record<string, ModelOption[]> = {
-  openai: [
-    { id: 'gpt-5.2', label: 'GPT-5.2', default: true },
-    { id: 'gpt-5', label: 'GPT-5' },
-    { id: 'gpt-5-mini', label: 'GPT-5 Mini' },
-  ],
   anthropic: [
     { id: 'claude-sonnet-4-6', label: 'Claude Sonnet 4.6', default: true },
     { id: 'claude-opus-4-6', label: 'Claude Opus 4.6' },
     { id: 'claude-haiku-4-5', label: 'Claude Haiku 4.5' },
     { id: 'claude-sonnet-4-0', label: 'Claude Sonnet 4' },
+  ],
+  openai: [
+    { id: 'gpt-5.2', label: 'GPT-5.2' },
+    { id: 'gpt-5', label: 'GPT-5' },
+    { id: 'gpt-5-mini', label: 'GPT-5 Mini' },
   ],
   gemini: [
     { id: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash', default: true },
