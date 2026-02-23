@@ -18,6 +18,10 @@ export function createGeminiImageProvider(model?: string): ImageProvider {
       const response = await ai.models.generateContent({
         model: activeModel,
         contents: prompt,
+        config: {
+          responseModalities: ['Text', 'Image'],
+          aspectRatio: '1:1',
+        },
       })
 
       const imagePart = response.candidates?.[0]?.content?.parts?.find(
