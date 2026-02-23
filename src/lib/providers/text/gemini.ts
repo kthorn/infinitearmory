@@ -27,7 +27,7 @@ export function createGeminiTextProvider(model?: string): TextProvider {
           responseMimeType: 'application/json',
           temperature: 0.8,
           maxOutputTokens: 10000,
-          systemInstruction: 'You are a fantasy RPG game designer. Always respond with valid JSON only.',
+          systemInstruction: 'You are a tabletop RPG game designer specializing in weapons, turrets, and mechs for both fantasy and sci-fi settings. Always respond with valid JSON only.',
         },
       })
 

@@ -8,6 +8,10 @@ export const effectTriggerSchema = z.enum([
   'on_attune',
   'on_roll_1',
   'on_roll_20',
+  // Sci-fi
+  'on_overheat',
+  'on_deploy',
+  'on_reload',
 ])
 
 export type EffectTrigger = z.infer<typeof effectTriggerSchema>
@@ -27,4 +31,7 @@ export const TRIGGER_DISPLAY: Record<EffectTrigger, string> = {
   on_attune: 'On Attunement',
   on_roll_1: 'On Natural 1',
   on_roll_20: 'On Natural 20',
+  on_overheat: 'On Overheat',
+  on_deploy: 'On Deploy',
+  on_reload: 'On Reload',
 }

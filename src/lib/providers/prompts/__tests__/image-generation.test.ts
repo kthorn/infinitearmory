@@ -3,6 +3,7 @@ import { buildImagePrompt } from '../image-generation'
 import type { WeaponSpec } from '@/lib/schemas'
 
 const mockWeaponSpec: WeaponSpec = {
+  category: 'fantasy_weapon',
   name: 'Flamebrand',
   weaponType: 'longsword',
   rarity: 'rare',

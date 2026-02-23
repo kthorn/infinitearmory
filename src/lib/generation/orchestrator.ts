@@ -101,8 +101,15 @@ export async function regenerateImage(weaponId: string, style?: string): Promise
   }
 
   // Validate inputs before mutating status (prevents marking weapon as error on bad input)
-  const weaponSpec = weaponSpecSchema.parse(JSON.parse(weapon.weaponSpec))
-  const options = generationOptionsSchema.parse(JSON.parse(weapon.options))
+  // Normalize legacy records that lack the `category` discriminator
+  const rawSpec = JSON.parse(weapon.weaponSpec)
+  if (rawSpec && !rawSpec.category) rawSpec.category = 'fantasy_weapon'
+  const weaponSpec = weaponSpecSchema.parse(rawSpec)
+
+  const rawOptions = JSON.parse(weapon.options)
+  if (rawOptions && !rawOptions.category) rawOptions.category = 'fantasy_weapon'
+  if (rawOptions?.ruleset === 'pathfinder2e' || rawOptions?.ruleset === 'generic') rawOptions.ruleset = 'dnd5e'
+  const options = generationOptionsSchema.parse(rawOptions)
   const imageStyle = style ? styleSchema.parse(style) : options.style ?? 'fantasy_art'
 
   try {
@@ -159,7 +166,10 @@ export async function rerollWeapon(weaponId: string): Promise<void> {
   }
 
   try {
-    const options = generationOptionsSchema.parse(JSON.parse(weapon.options))
+    const rawOptions = JSON.parse(weapon.options)
+    if (rawOptions && !rawOptions.category) rawOptions.category = 'fantasy_weapon'
+    if (rawOptions?.ruleset === 'pathfinder2e' || rawOptions?.ruleset === 'generic') rawOptions.ruleset = 'dnd5e'
+    const options = generationOptionsSchema.parse(rawOptions)
 
     // Clear existing results (including model metadata to prevent stale data)
     await db.weapon.update({

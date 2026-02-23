@@ -25,7 +25,7 @@ export function createAnthropicTextProvider(model?: string): TextProvider {
         max_tokens: 10000,
         messages: [{ role: 'user', content: userPrompt }],
         system:
-          'You are a fantasy RPG game designer. Always respond with valid JSON only, no other text or markdown formatting.',
+          'You are a tabletop RPG game designer specializing in weapons, turrets, and mechs for both fantasy and sci-fi settings. Always respond with valid JSON only, no other text or markdown formatting.',
       })
 
       const textBlock = response.content.find((block) => block.type === 'text')

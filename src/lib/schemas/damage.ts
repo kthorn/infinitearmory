@@ -1,6 +1,7 @@
 import { z } from 'zod'
 
 export const damageTypeSchema = z.enum([
+  // Fantasy
   'slashing',
   'piercing',
   'bludgeoning',
@@ -14,6 +15,13 @@ export const damageTypeSchema = z.enum([
   'radiant',
   'force',
   'psychic',
+  // Sci-fi
+  'plasma',
+  'laser',
+  'kinetic',
+  'explosive',
+  'emp',
+  'ion',
 ])
 
 export type DamageType = z.infer<typeof damageTypeSchema>

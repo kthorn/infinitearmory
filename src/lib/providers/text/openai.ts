@@ -23,7 +23,7 @@ export function createOpenAITextProvider(model?: string): TextProvider {
       const response = await client.chat.completions.create({
         model: activeModel,
         messages: [
-          { role: 'system', content: 'You are a fantasy RPG game designer. Always respond with valid JSON only.' },
+          { role: 'system', content: 'You are a tabletop RPG game designer specializing in weapons, turrets, and mechs for both fantasy and sci-fi settings. Always respond with valid JSON only.' },
           { role: 'user', content: weaponPrompt },
         ],
         response_format: { type: 'json_object' },

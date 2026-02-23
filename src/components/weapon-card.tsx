@@ -6,6 +6,7 @@ import ReactMarkdown from 'react-markdown'
 import { Button, Card, CardContent, CardFooter } from './ui'
 import { StatBlock } from './stat-block'
 import type { WeaponResponse } from '@/lib/schemas'
+import { CATEGORY_DISPLAY } from '@/lib/schemas'
 
 interface WeaponCardProps {
   weapon: WeaponResponse
@@ -74,6 +75,12 @@ export function WeaponCard({ weapon, onRegenerateImage, onRerollStats }: WeaponC
             <div className="absolute inset-0 flex items-center justify-center text-slate-600">
               No image
             </div>
+          )}
+          {/* Category badge */}
+          {weapon.weaponSpec.category && weapon.weaponSpec.category !== 'fantasy_weapon' && (
+            <span className="absolute top-2 left-2 px-2 py-1 bg-slate-900/80 text-xs font-medium text-indigo-300 rounded border border-indigo-500/30">
+              {CATEGORY_DISPLAY[weapon.weaponSpec.category]}
+            </span>
           )}
         </div>
 

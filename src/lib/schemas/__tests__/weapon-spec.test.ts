@@ -2,8 +2,9 @@ import { describe, it, expect } from 'vitest'
 import { weaponSpecSchema, generationOptionsSchema, textGenerationResultSchema, chargesSchema } from '../index'
 
 describe('weaponSpecSchema', () => {
-  it('validates a complete weapon spec', () => {
+  it('validates a complete fantasy weapon spec', () => {
     const validWeapon = {
+      category: 'fantasy_weapon',
       name: 'Flametongue',
       rarity: 'rare',
       weaponType: 'longsword',
@@ -23,8 +24,9 @@ describe('weaponSpecSchema', () => {
     expect(result.success).toBe(true)
   })
 
-  it('validates a minimal weapon spec', () => {
+  it('validates a minimal fantasy weapon spec', () => {
     const minimalWeapon = {
+      category: 'fantasy_weapon',
       name: 'Simple Dagger',
       rarity: 'common',
       weaponType: 'dagger',
@@ -34,19 +36,83 @@ describe('weaponSpecSchema', () => {
 
     const result = weaponSpecSchema.safeParse(minimalWeapon)
     expect(result.success).toBe(true)
-    if (result.success) {
+    if (result.success && result.data.category === 'fantasy_weapon') {
       expect(result.data.properties).toEqual([])
       expect(result.data.effects).toEqual([])
       expect(result.data.tags).toEqual([])
     }
   })
 
+  it('validates a sci-fi handheld spec', () => {
+    const handheld = {
+      category: 'scifi_handheld',
+      name: 'Plasma Repeater',
+      rarity: 'uncommon',
+      weaponClass: 'rifle',
+      firingMode: 'burst',
+      ammoCapacity: 30,
+      range: 'medium',
+      damage: { dice: '2d6', type: 'plasma' },
+      rulesText: 'A standard-issue plasma rifle.',
+      effects: [],
+      tags: ['plasma'],
+    }
+
+    const result = weaponSpecSchema.safeParse(handheld)
+    expect(result.success).toBe(true)
+  })
+
+  it('validates a turret spec', () => {
+    const turret = {
+      category: 'scifi_turret',
+      name: 'Sentinel MK-IV',
+      rarity: 'rare',
+      mountType: 'tracking',
+      firingMode: 'auto',
+      range: 'long',
+      rateOfFire: '3 rounds/turn',
+      damage: { dice: '3d8', type: 'laser' },
+      rulesText: 'An automated tracking turret.',
+      effects: [],
+      tags: [],
+    }
+
+    const result = weaponSpecSchema.safeParse(turret)
+    expect(result.success).toBe(true)
+  })
+
+  it('validates a mech spec', () => {
+    const mech = {
+      category: 'mech',
+      name: 'Atlas AS7-D',
+      rarity: 'legendary',
+      mechClass: 'assault',
+      tonnage: 100,
+      armorRating: 400,
+      heatCapacity: 30,
+      mobility: { speed: 3, jumpJets: false },
+      weaponSystems: [
+        { name: 'AC/20', damage: { dice: '4d10', type: 'kinetic' }, location: 'right torso', heatGenerated: 7 },
+        { name: 'Medium Laser', damage: { dice: '1d8', type: 'laser' }, location: 'left arm', heatGenerated: 3 },
+      ],
+      specialSystems: ['Targeting Computer'],
+      damage: { dice: '4d10', type: 'kinetic' },
+      rulesText: 'A 100-ton assault mech.',
+      effects: [],
+      tags: ['assault', 'heavy'],
+    }
+
+    const result = weaponSpecSchema.safeParse(mech)
+    expect(result.success).toBe(true)
+  })
+
   it('rejects invalid damage dice format', () => {
     const invalidWeapon = {
+      category: 'fantasy_weapon',
       name: 'Bad Weapon',
       rarity: 'common',
       weaponType: 'sword',
-      damage: { dice: '2', type: 'slashing' }, // Invalid format
+      damage: { dice: '2', type: 'slashing' },
       rulesText: 'Rules text here.',
     }
 
@@ -56,8 +122,9 @@ describe('weaponSpecSchema', () => {
 
   it('rejects invalid rarity', () => {
     const invalidWeapon = {
+      category: 'fantasy_weapon',
       name: 'Bad Weapon',
-      rarity: 'super_legendary', // Invalid
+      rarity: 'super_legendary',
       weaponType: 'sword',
       damage: { dice: '1d6', type: 'slashing' },
       rulesText: 'Rules text here.',
@@ -69,6 +136,7 @@ describe('weaponSpecSchema', () => {
 
   it('rejects effects array exceeding max length', () => {
     const weapon = {
+      category: 'fantasy_weapon',
       name: 'Overloaded Weapon',
       rarity: 'rare',
       weaponType: 'sword',
@@ -86,12 +154,45 @@ describe('weaponSpecSchema', () => {
 
   it('rejects tags array exceeding max length', () => {
     const weapon = {
+      category: 'fantasy_weapon',
       name: 'Over-tagged Weapon',
       rarity: 'common',
       weaponType: 'sword',
       damage: { dice: '1d6', type: 'slashing' },
       tags: Array.from({ length: 21 }, (_, i) => `tag${i}`),
       rulesText: 'Rules text here.',
+    }
+
+    const result = weaponSpecSchema.safeParse(weapon)
+    expect(result.success).toBe(false)
+  })
+
+  it('rejects mech with no weapon systems', () => {
+    const mech = {
+      category: 'mech',
+      name: 'Empty Mech',
+      rarity: 'common',
+      mechClass: 'light',
+      tonnage: 20,
+      armorRating: 50,
+      heatCapacity: 10,
+      mobility: { speed: 8, jumpJets: true },
+      weaponSystems: [],
+      damage: { dice: '1d4', type: 'kinetic' },
+      rulesText: 'A mech with no weapons.',
+    }
+
+    const result = weaponSpecSchema.safeParse(mech)
+    expect(result.success).toBe(false)
+  })
+
+  it('rejects unknown category', () => {
+    const weapon = {
+      category: 'spaceship',
+      name: 'Bad Category',
+      rarity: 'common',
+      damage: { dice: '1d6', type: 'kinetic' },
+      rulesText: 'Not a valid category.',
     }
 
     const result = weaponSpecSchema.safeParse(weapon)
@@ -121,6 +222,7 @@ describe('generationOptionsSchema', () => {
     const result = generationOptionsSchema.safeParse({})
     expect(result.success).toBe(true)
     if (result.success) {
+      expect(result.data.category).toBe('fantasy_weapon')
       expect(result.data.ruleset).toBe('dnd5e')
       expect(result.data.style).toBe('fantasy_art')
     }
@@ -128,9 +230,10 @@ describe('generationOptionsSchema', () => {
 
   it('accepts full options', () => {
     const options = {
-      ruleset: 'pathfinder2e',
+      category: 'scifi_handheld',
+      ruleset: 'generic_scifi',
       rarity: 'legendary',
-      style: 'dark_fantasy',
+      style: 'cyberpunk',
       seed: 12345,
     }
 
@@ -143,6 +246,7 @@ describe('textGenerationResultSchema', () => {
   it('validates complete generation result', () => {
     const result = {
       weaponSpec: {
+        category: 'fantasy_weapon',
         name: 'Test Sword',
         rarity: 'uncommon',
         weaponType: 'shortsword',

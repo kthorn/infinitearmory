@@ -4,11 +4,18 @@ import { useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { Button, Select, GroupedSelect, Card, CardContent, CardFooter } from './ui'
 import { MicrophoneButton } from './microphone-button'
-import { RULESET_DISPLAY, STYLE_DISPLAY, RARITY_DISPLAY } from '@/lib/schemas'
+import {
+  CATEGORY_DISPLAY,
+  STYLE_DISPLAY,
+  RARITY_DISPLAY,
+  CATEGORY_STYLES,
+  CATEGORY_RULESET,
+  CATEGORY_DEFAULT_STYLE,
+} from '@/lib/schemas'
+import type { Category, Style } from '@/lib/schemas'
 import { TEXT_MODELS, IMAGE_MODELS, PROVIDER_DISPLAY, getDefaultTextModel, getDefaultImageModel } from '@/lib/models'
 
-const rulesetOptions = Object.entries(RULESET_DISPLAY).map(([value, label]) => ({ value, label }))
-const styleOptions = Object.entries(STYLE_DISPLAY).map(([value, label]) => ({ value, label }))
+const categoryOptions = Object.entries(CATEGORY_DISPLAY).map(([value, label]) => ({ value, label }))
 const rarityOptions = [
   { value: '', label: 'Auto (LLM chooses)' },
   ...Object.entries(RARITY_DISPLAY).map(([value, label]) => ({ value, label })),
@@ -24,6 +31,11 @@ const imageModelGroups = Object.entries(IMAGE_MODELS).map(([provider, models]) =
   options: models.map((m) => ({ value: m.id, label: m.label })),
 }))
 
+function getStyleOptions(category: Category) {
+  const styles = CATEGORY_STYLES[category]
+  return styles.map((value) => ({ value, label: STYLE_DISPLAY[value] }))
+}
+
 export function WeaponForm() {
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -31,11 +43,20 @@ export function WeaponForm() {
   const [error, setError] = useState<string | null>(null)
 
   const [prompt, setPrompt] = useState(searchParams.get('prompt') ?? '')
-  const [ruleset, setRuleset] = useState('dnd5e')
-  const [style, setStyle] = useState('fantasy_art')
+  const [category, setCategory] = useState<Category>('fantasy_weapon')
+  const [style, setStyle] = useState<Style>('fantasy_art')
   const [rarity, setRarity] = useState('')
   const [textModel, setTextModel] = useState(getDefaultTextModel())
   const [imageModel, setImageModel] = useState(getDefaultImageModel())
+
+  function handleCategoryChange(newCategory: Category) {
+    setCategory(newCategory)
+    // Reset style to the default for the new category if current style isn't available
+    const availableStyles = CATEGORY_STYLES[newCategory]
+    if (!availableStyles.includes(style)) {
+      setStyle(CATEGORY_DEFAULT_STYLE[newCategory])
+    }
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -49,7 +70,8 @@ export function WeaponForm() {
         body: JSON.stringify({
           prompt,
           options: {
-            ruleset,
+            category,
+            ruleset: CATEGORY_RULESET[category],
             style,
             ...(rarity && { rarity }),
             textModel,
@@ -72,18 +94,25 @@ export function WeaponForm() {
     }
   }
 
+  const placeholders: Record<Category, string> = {
+    fantasy_weapon: "Describe your weapon idea... (e.g., 'A sword made of crystallized starlight, wielded by an ancient elven queen')",
+    scifi_handheld: "Describe your weapon idea... (e.g., 'A plasma pistol that overcharges for devastating shots, used by bounty hunters')",
+    scifi_turret: "Describe your turret idea... (e.g., 'An orbital defense laser that tracks incoming ships with AI targeting')",
+    mech: "Describe your mech idea... (e.g., 'A heavy assault mech built for urban warfare with dual autocannons')",
+  }
+
   return (
     <Card className="max-w-2xl mx-auto">
       <form onSubmit={handleSubmit}>
         <CardContent className="space-y-4">
           <div>
-            <label htmlFor="weapon-prompt" className="block text-sm font-medium text-slate-300 mb-1">Weapon Concept</label>
+            <label htmlFor="weapon-prompt" className="block text-sm font-medium text-slate-300 mb-1">Concept</label>
             <div className="relative">
               <textarea
                 id="weapon-prompt"
                 value={prompt}
                 onChange={(e) => setPrompt(e.target.value)}
-                placeholder="Describe your weapon idea... (e.g., 'A sword made of crystallized starlight, wielded by an ancient elven queen')"
+                placeholder={placeholders[category]}
                 className="w-full px-4 py-3 pb-10 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent min-h-[100px] resize-y"
                 required
                 minLength={3}
@@ -106,16 +135,16 @@ export function WeaponForm() {
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <Select
-              label="Ruleset"
-              options={rulesetOptions}
-              value={ruleset}
-              onChange={(e) => setRuleset(e.target.value)}
+              label="Category"
+              options={categoryOptions}
+              value={category}
+              onChange={(e) => handleCategoryChange(e.target.value as Category)}
             />
             <Select
               label="Art Style"
-              options={styleOptions}
+              options={getStyleOptions(category)}
               value={style}
-              onChange={(e) => setStyle(e.target.value)}
+              onChange={(e) => setStyle(e.target.value as Style)}
             />
             <Select
               label="Rarity"
@@ -149,7 +178,7 @@ export function WeaponForm() {
 
         <CardFooter>
           <Button type="submit" loading={loading} disabled={!prompt.trim()} className="w-full">
-            {loading ? 'Creating...' : 'Generate Weapon'}
+            {loading ? 'Creating...' : `Generate ${CATEGORY_DISPLAY[category]}`}
           </Button>
         </CardFooter>
       </form>
