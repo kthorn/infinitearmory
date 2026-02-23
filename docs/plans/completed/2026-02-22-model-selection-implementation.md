@@ -1,5 +1,7 @@
 # Model Selection UI Implementation Plan
 
+**Status:** Refined
+
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
 **Goal:** Add UI dropdowns to select specific text and image generation models from each provider (OpenAI, Anthropic, Google).
@@ -30,6 +32,8 @@ import {
   getDefaultImageModel,
   getAllTextModels,
   getAllImageModels,
+  safeResolveTextProvider,
+  safeResolveImageProvider,
 } from '../models'
 
 describe('models', () => {
@@ -133,6 +137,37 @@ describe('models', () => {
       expect(resolveImageProvider(id)).toBeDefined()
     })
   })
+
+  describe('safeResolveTextProvider', () => {
+    it('resolves known model', () => {
+      const result = safeResolveTextProvider('gpt-5.2')
+      expect(result.provider).toBe('openai')
+      expect(result.model).toBe('gpt-5.2')
+    })
+
+    it('falls back to default for unknown model', () => {
+      const result = safeResolveTextProvider('removed-model')
+      expect(result.model).toBe(getDefaultTextModel())
+    })
+
+    it('falls back to default for undefined', () => {
+      const result = safeResolveTextProvider(undefined)
+      expect(result.model).toBe(getDefaultTextModel())
+    })
+  })
+
+  describe('safeResolveImageProvider', () => {
+    it('resolves known model', () => {
+      const result = safeResolveImageProvider('gpt-image-1')
+      expect(result.provider).toBe('openai')
+      expect(result.model).toBe('gpt-image-1')
+    })
+
+    it('falls back to default for unknown model', () => {
+      const result = safeResolveImageProvider('removed-model')
+      expect(result.model).toBe(getDefaultImageModel())
+    })
+  })
 })
 ```
 
@@ -152,7 +187,7 @@ export interface ModelOption {
   default?: boolean
 }
 
-export const TEXT_MODELS: Record<string, ModelOption[]> = {
+export const TEXT_MODELS = {
   openai: [
     { id: 'gpt-5.2', label: 'GPT-5.2', default: true },
     { id: 'gpt-5', label: 'GPT-5' },
@@ -168,20 +203,19 @@ export const TEXT_MODELS: Record<string, ModelOption[]> = {
     { id: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash', default: true },
     { id: 'gemini-2.5-pro', label: 'Gemini 2.5 Pro' },
   ],
-}
+} as const satisfies Record<string, ModelOption[]>
 
-export const IMAGE_MODELS: Record<string, ModelOption[]> = {
+export const IMAGE_MODELS = {
   openai: [
     { id: 'gpt-image-1', label: 'GPT Image 1', default: true },
     { id: 'gpt-image-1-mini', label: 'GPT Image 1 Mini' },
   ],
   gemini: [
     { id: 'gemini-2.5-flash-image', label: 'Gemini 2.5 Flash', default: true },
-    { id: 'imagen-4.0-generate-001', label: 'Imagen 4' },
-    { id: 'imagen-4.0-ultra-generate-001', label: 'Imagen 4 Ultra' },
-    { id: 'imagen-4.0-fast-generate-001', label: 'Imagen 4 Fast' },
+    // Note: Imagen models removed — they require the Imagen API, not generateContent.
+    // Add them in a future iteration with dedicated provider branching.
   ],
-}
+} as const satisfies Record<string, ModelOption[]>
 
 export const PROVIDER_DISPLAY: Record<string, string> = {
   openai: 'OpenAI',
@@ -189,14 +223,14 @@ export const PROVIDER_DISPLAY: Record<string, string> = {
   gemini: 'Google',
 }
 
-export function resolveTextProvider(modelId: string): string {
+export function resolveTextProvider(modelId: string): keyof typeof TEXT_MODELS {
   for (const [provider, models] of Object.entries(TEXT_MODELS)) {
     if (models.some((m) => m.id === modelId)) return provider
   }
   throw new Error(`Unknown text model: ${modelId}`)
 }
 
-export function resolveImageProvider(modelId: string): string {
+export function resolveImageProvider(modelId: string): keyof typeof IMAGE_MODELS {
   for (const [provider, models] of Object.entries(IMAGE_MODELS)) {
     if (models.some((m) => m.id === modelId)) return provider
   }
@@ -215,6 +249,7 @@ export function getAllImageModels(): Array<ModelOption & { provider: string }> {
   )
 }
 
+// Derive defaults from registry flags (single source of truth)
 export function getDefaultTextModel(): string {
   for (const models of Object.values(TEXT_MODELS)) {
     const def = models.find((m) => m.default)
@@ -229,6 +264,29 @@ export function getDefaultImageModel(): string {
     if (def) return def.id
   }
   throw new Error('No default image model configured')
+}
+
+// Safe resolvers for stored/historical model IDs — fallback to defaults instead of throwing
+export function safeResolveTextProvider(modelId: string | undefined): { provider: keyof typeof TEXT_MODELS; model: string } {
+  if (!modelId) return { provider: resolveTextProvider(getDefaultTextModel()), model: getDefaultTextModel() }
+  try {
+    return { provider: resolveTextProvider(modelId), model: modelId }
+  } catch {
+    console.warn(`Unknown stored text model "${modelId}", falling back to default`)
+    const fallback = getDefaultTextModel()
+    return { provider: resolveTextProvider(fallback), model: fallback }
+  }
+}
+
+export function safeResolveImageProvider(modelId: string | undefined): { provider: keyof typeof IMAGE_MODELS; model: string } {
+  if (!modelId) return { provider: resolveImageProvider(getDefaultImageModel()), model: getDefaultImageModel() }
+  try {
+    return { provider: resolveImageProvider(modelId), model: modelId }
+  } catch {
+    console.warn(`Unknown stored image model "${modelId}", falling back to default`)
+    const fallback = getDefaultImageModel()
+    return { provider: resolveImageProvider(fallback), model: fallback }
+  }
 }
 ```
 
@@ -337,7 +395,9 @@ git commit -m "feat: add GroupedSelect component with optgroup support"
 
 **Step 1: Write the failing test**
 
-There are no existing tests for generation-options schema. Add a focused test:
+> **Note:** Existing generation-options tests live in `src/lib/schemas/__tests__/weapon-spec.test.ts`. Add model-specific tests in a new focused file to avoid bloating that file. The existing tests should continue to pass unchanged.
+
+Add a focused test:
 
 ```typescript
 // src/lib/schemas/__tests__/generation-options.test.ts
@@ -389,13 +449,23 @@ Expected: FAIL — textModel/imageModel not recognized or stripped by schema
 
 **Step 3: Write implementation**
 
-Modify `src/lib/schemas/generation-options.ts` — add two optional string fields:
+Modify `src/lib/schemas/generation-options.ts` — add two optional fields validated against the model registry:
 
 ```typescript
+import { getAllTextModels, getAllImageModels } from '../models'
+
+// Build valid model ID sets from registry
+const validTextModelIds = getAllTextModels().map((m) => m.id)
+const validImageModelIds = getAllImageModels().map((m) => m.id)
+
 // Add to generationOptionsSchema object:
-  textModel: z.string().optional(),
-  imageModel: z.string().optional(),
+  textModel: z.string().refine((id) => validTextModelIds.includes(id), { message: 'Invalid text model ID' }).optional(),
+  imageModel: z.string().refine((id) => validImageModelIds.includes(id), { message: 'Invalid image model ID' }).optional(),
 ```
+
+This ensures invalid model IDs are rejected at API validation time (400 response) rather than failing silently during background generation.
+
+> **Important:** This validation applies to the `POST /api/weapons` endpoint (new weapon creation). The reroll and regenerate-image endpoints re-read stored `options` from the DB, which may contain model IDs that have been removed from the registry in future updates. The orchestrator should handle `options.textModel`/`options.imageModel` gracefully — if the stored model ID is no longer valid, fall back to the provider's default model rather than crashing.
 
 **Step 4: Run test to verify it passes**
 
@@ -416,127 +486,13 @@ git commit -m "feat: add textModel and imageModel fields to generation options s
 
 ---
 
-### Task 4: Refactor Text Provider Factories to Accept Model Parameter
+### Task 4: Create Gemini Text Provider
 
-**Files:**
-- Modify: `src/lib/providers/text/openai.ts`
-- Modify: `src/lib/providers/text/anthropic.ts`
-- Modify: `src/lib/providers/text/index.ts`
-- Modify: `src/lib/providers/types.ts`
-
-**Step 1: Update provider types**
-
-In `src/lib/providers/types.ts`, add `'gemini'` to `TextProviderType`:
-
-```typescript
-export type TextProviderType = 'openai' | 'anthropic' | 'gemini'
-```
-
-**Step 2: Refactor OpenAI text provider**
-
-In `src/lib/providers/text/openai.ts`:
-- Change `const MODEL = 'gpt-4o'` to a default parameter
-- Add `model` parameter to `createOpenAITextProvider(model?: string)`
-- Use `model ?? 'gpt-5.2'` throughout (update default from gpt-4o to gpt-5.2)
-
-```typescript
-const DEFAULT_MODEL = 'gpt-5.2'
-
-export function createOpenAITextProvider(model?: string): TextProvider {
-  if (!env.OPENAI_API_KEY) {
-    throw new Error('OPENAI_API_KEY is not configured')
-  }
-
-  const activeModel = model ?? DEFAULT_MODEL
-  const client = new OpenAI({ apiKey: env.OPENAI_API_KEY })
-
-  return {
-    async generateWeapon(prompt: string, options: GenerationOptions): Promise<TextGenerationResult> {
-      // ... same logic but use `activeModel` instead of `MODEL`
-    },
-  }
-}
-```
-
-Also update `attemptRepair` to accept model parameter.
-
-**Step 3: Refactor Anthropic text provider**
-
-In `src/lib/providers/text/anthropic.ts`:
-- Same pattern: add `model?: string` parameter
-- Default to `'claude-sonnet-4-6'` (update from older model)
-
-```typescript
-const DEFAULT_MODEL = 'claude-sonnet-4-6'
-
-export function createAnthropicTextProvider(model?: string): TextProvider {
-  const activeModel = model ?? DEFAULT_MODEL
-  // ... same logic with activeModel
-}
-```
-
-**Step 4: Refactor text provider factory**
-
-In `src/lib/providers/text/index.ts`:
-- Remove singleton pattern
-- Accept optional `modelId` parameter
-- Use `resolveTextProvider` from models.ts when modelId provided
-
-```typescript
-import { env } from '@/lib/env'
-import { resolveTextProvider } from '@/lib/models'
-import { createOpenAITextProvider } from './openai'
-import { createAnthropicTextProvider } from './anthropic'
-import { createGeminiTextProvider } from './gemini'
-import type { TextProvider, TextProviderType } from '../types'
-
-export function getTextProvider(modelId?: string): TextProvider {
-  if (modelId) {
-    const providerType = resolveTextProvider(modelId) as TextProviderType
-    return createTextProvider(providerType, modelId)
-  }
-  return createTextProvider(env.TEXT_PROVIDER as TextProviderType)
-}
-
-function createTextProvider(type: TextProviderType, model?: string): TextProvider {
-  switch (type) {
-    case 'openai':
-      return createOpenAITextProvider(model)
-    case 'anthropic':
-      return createAnthropicTextProvider(model)
-    case 'gemini':
-      return createGeminiTextProvider(model)
-    default:
-      throw new Error(`Unknown text provider: ${type}`)
-  }
-}
-```
-
-**Step 5: Verify type checking**
-
-Run: `npx tsc --noEmit`
-Expected: No errors (gemini provider doesn't exist yet, will be added in Task 5)
-
-Note: This step may have a type error until Task 5 is completed. If so, add a temporary stub or complete Task 5 first.
-
-**Step 6: Run existing tests**
-
-Run: `npx vitest run`
-Expected: All tests PASS
-
-**Step 7: Commit**
-
-```bash
-git add src/lib/providers/text/openai.ts src/lib/providers/text/anthropic.ts src/lib/providers/text/index.ts src/lib/providers/types.ts
-git commit -m "refactor: text provider factories accept model parameter, remove singleton"
-```
-
----
-
-### Task 5: Create Gemini Text Provider
+> **Note:** This task was moved before the text factory refactor (old Task 5) so that `createGeminiTextProvider` exists when the factory imports it.
 
 **Files:**
 - Create: `src/lib/providers/text/gemini.ts`
+- Modify: `src/lib/env.ts`
 
 **Step 1: Write the implementation**
 
@@ -636,11 +592,7 @@ async function attemptRepair(ai: GoogleGenAI, model: string, invalidJson: string
 }
 ```
 
-**Step 2: Check that `stripCodeFences` is exported from prompts**
-
-Verify `src/lib/providers/prompts/index.ts` exports `stripCodeFences`. If not, add the export.
-
-**Step 3: Update env schema**
+**Step 2: Update env schema**
 
 In `src/lib/env.ts`, add `'gemini'` to TEXT_PROVIDER enum:
 
@@ -648,21 +600,143 @@ In `src/lib/env.ts`, add `'gemini'` to TEXT_PROVIDER enum:
 TEXT_PROVIDER: z.enum(['openai', 'anthropic', 'gemini']).default('openai'),
 ```
 
-**Step 4: Verify type checking**
+**Step 3: Verify type checking**
 
 Run: `npx tsc --noEmit`
 Expected: No errors
 
-**Step 5: Run all tests**
+**Step 4: Run all tests**
 
 Run: `npx vitest run`
 Expected: All PASS
 
-**Step 6: Commit**
+**Step 5: Commit**
 
 ```bash
 git add src/lib/providers/text/gemini.ts src/lib/env.ts
 git commit -m "feat: add Gemini text generation provider"
+```
+
+---
+
+### Task 5: Refactor Text Provider Factories to Accept Model Parameter
+
+**Files:**
+- Modify: `src/lib/providers/text/openai.ts`
+- Modify: `src/lib/providers/text/anthropic.ts`
+- Modify: `src/lib/providers/text/index.ts`
+- Modify: `src/lib/providers/types.ts`
+- Modify: `src/lib/providers/index.ts` (update barrel exports in same task)
+
+**Step 1: Update provider types**
+
+In `src/lib/providers/types.ts`, add `'gemini'` to `TextProviderType`:
+
+```typescript
+export type TextProviderType = 'openai' | 'anthropic' | 'gemini'
+```
+
+**Step 2: Refactor OpenAI text provider**
+
+In `src/lib/providers/text/openai.ts`:
+- Change `const MODEL = 'gpt-4o'` to a default parameter
+- Add `model` parameter to `createOpenAITextProvider(model?: string)`
+- Use `model ?? 'gpt-5.2'` throughout (update default from gpt-4o to gpt-5.2)
+
+```typescript
+const DEFAULT_MODEL = 'gpt-5.2'
+
+export function createOpenAITextProvider(model?: string): TextProvider {
+  if (!env.OPENAI_API_KEY) {
+    throw new Error('OPENAI_API_KEY is not configured')
+  }
+
+  const activeModel = model ?? DEFAULT_MODEL
+  const client = new OpenAI({ apiKey: env.OPENAI_API_KEY })
+
+  return {
+    async generateWeapon(prompt: string, options: GenerationOptions): Promise<TextGenerationResult> {
+      // ... same logic but use `activeModel` instead of `MODEL`
+    },
+  }
+}
+```
+
+Also update `attemptRepair` to accept model parameter.
+
+**Step 3: Refactor Anthropic text provider**
+
+In `src/lib/providers/text/anthropic.ts`:
+- Same pattern: add `model?: string` parameter
+- Default to `'claude-sonnet-4-6'` (update from older model)
+
+```typescript
+const DEFAULT_MODEL = 'claude-sonnet-4-6'
+
+export function createAnthropicTextProvider(model?: string): TextProvider {
+  const activeModel = model ?? DEFAULT_MODEL
+  // ... same logic with activeModel
+}
+```
+
+**Step 4: Refactor text provider factory**
+
+In `src/lib/providers/text/index.ts`:
+- Remove singleton pattern
+- Accept optional `modelId` parameter
+- Use `resolveTextProvider` from models.ts when modelId provided
+
+```typescript
+import { env } from '@/lib/env'
+import { resolveTextProvider } from '@/lib/models'
+import { createOpenAITextProvider } from './openai'
+import { createAnthropicTextProvider } from './anthropic'
+import { createGeminiTextProvider } from './gemini'
+import type { TextProvider, TextProviderType } from '../types'
+
+export function getTextProvider(modelId?: string): TextProvider {
+  if (modelId) {
+    const providerType = resolveTextProvider(modelId)
+    return createTextProvider(providerType, modelId)
+  }
+  return createTextProvider(env.TEXT_PROVIDER)
+}
+
+function createTextProvider(type: TextProviderType, model?: string): TextProvider {
+  switch (type) {
+    case 'openai':
+      return createOpenAITextProvider(model)
+    case 'anthropic':
+      return createAnthropicTextProvider(model)
+    case 'gemini':
+      return createGeminiTextProvider(model)
+    default:
+      throw new Error(`Unknown text provider: ${type}`)
+  }
+}
+```
+
+**Step 5: Update barrel exports**
+
+In `src/lib/providers/index.ts`: remove `resetTextProvider` export (text singleton is gone). Keep `resetImageProvider` for now — it will be removed in Task 6 when the image singleton is also removed. Ensure `getTextProvider` is re-exported.
+
+Check if any test files import `resetTextProvider` — if so, remove those calls.
+
+**Step 6: Verify type checking**
+
+Run: `npx tsc --noEmit`
+Expected: No errors (Gemini text provider was created in Task 4)
+
+**Step 7: Run existing tests**
+
+Run: `npx vitest run`
+Expected: All tests PASS
+
+**Step 8: Commit**
+
+```bash
+git add src/lib/providers/text/openai.ts src/lib/providers/text/anthropic.ts src/lib/providers/text/index.ts src/lib/providers/types.ts src/lib/providers/index.ts
+git commit -m "refactor: text provider factories accept model parameter, remove singleton"
 ```
 
 ---
@@ -673,13 +747,14 @@ git commit -m "feat: add Gemini text generation provider"
 - Modify: `src/lib/providers/image/openai.ts`
 - Modify: `src/lib/providers/image/gemini.ts`
 - Modify: `src/lib/providers/image/index.ts`
+- Modify: `src/lib/providers/index.ts` (update barrel exports in same task)
 
 **Step 1: Refactor OpenAI image provider**
 
 In `src/lib/providers/image/openai.ts`:
 - Add `model?: string` parameter
 - Default to `'gpt-image-1'` (migrating from dall-e-3)
-- Note: gpt-image-* models may need different API parameters than dall-e-3. Verify `response_format` and `size` support. If they differ, branch on model name.
+- **Important:** `gpt-image-*` models do NOT support `response_format: 'url'` — they only return `b64_json`. Remove any `response_format` parameter and always expect base64 data. Also update `size` to use `'auto'` or `'1024x1024'` (both supported). Check current code for `dall-e-3`-specific parameters and update them.
 
 ```typescript
 const DEFAULT_MODEL = 'gpt-image-1'
@@ -717,10 +792,10 @@ import { resolveImageProvider } from '@/lib/models'
 
 export function getImageProvider(modelId?: string): ImageProvider {
   if (modelId) {
-    const providerType = resolveImageProvider(modelId) as ImageProviderType
+    const providerType = resolveImageProvider(modelId)
     return createImageProvider(providerType, modelId)
   }
-  return createImageProvider(env.IMAGE_PROVIDER as ImageProviderType)
+  return createImageProvider(env.IMAGE_PROVIDER)
 }
 
 function createImageProvider(type: ImageProviderType, model?: string): ImageProvider {
@@ -735,15 +810,19 @@ function createImageProvider(type: ImageProviderType, model?: string): ImageProv
 }
 ```
 
-**Step 4: Run tests**
+**Step 4: Update barrel exports**
+
+In `src/lib/providers/index.ts`: remove `resetImageProvider` export (singleton is gone). Ensure `getImageProvider` is re-exported.
+
+**Step 5: Run tests**
 
 Run: `npx vitest run`
 Expected: All PASS
 
-**Step 5: Commit**
+**Step 6: Commit**
 
 ```bash
-git add src/lib/providers/image/openai.ts src/lib/providers/image/gemini.ts src/lib/providers/image/index.ts
+git add src/lib/providers/image/openai.ts src/lib/providers/image/gemini.ts src/lib/providers/image/index.ts src/lib/providers/index.ts
 git commit -m "refactor: image provider factories accept model parameter, remove singleton"
 ```
 
@@ -768,11 +847,12 @@ const imageProvider = getImageProvider(options.imageModel)
 
 **Step 2: Update `regenerateImage`**
 
-Also pass model from stored options:
+For regenerate/reroll, the stored `options` may contain model IDs that have been removed from the registry. Use the safe resolvers from `models.ts` instead of passing raw model IDs:
 
 ```typescript
-// Line ~115: was getImageProvider(), now:
-const imageProvider = getImageProvider(options.imageModel)
+// In regenerateImage — options come from stored DB record, may have stale model IDs:
+const { model: imageModelId } = safeResolveImageProvider(options.imageModel)
+const imageProvider = getImageProvider(imageModelId)
 ```
 
 **Step 3: Update `rerollWeapon`**
@@ -782,7 +862,9 @@ No changes needed — it calls `generateWeapon` which now reads from options.
 **Step 4: Run existing tests**
 
 Run: `npx vitest run`
-Expected: All PASS (orchestrator tests mock the providers module entirely)
+Expected: All PASS
+
+> **Note:** There are no dedicated orchestrator unit tests. The orchestrator is exercised indirectly through API route tests which mock the generation module. The changes here are minimal (passing an additional argument), so manual verification in Task 10 is sufficient.
 
 **Step 5: Commit**
 
@@ -873,27 +955,57 @@ git commit -m "feat: add text and image model selection dropdowns to weapon form
 
 ---
 
-### Task 9: Update Provider Barrel Exports
+### Task 9: Expose Model Fields in API Response
+
+> **Note:** The smoke test (Task 10 step 3) expects the API response to include `textModel` and `imageModel`. The current `weaponResponseSchema` and `toWeaponResponse` transformer don't include these fields. The DB already has dedicated `textModel`/`imageModel` columns that the orchestrator populates. This task surfaces them in the API response.
 
 **Files:**
-- Modify: `src/lib/providers/index.ts`
+- Modify: `src/lib/schemas/api/weapon-response.ts`
+- Modify: `src/lib/api/transform.ts`
 
-**Step 1: Update exports**
+**Step 1: Update weapon response schema**
 
-Remove `resetTextProvider` and `resetImageProvider` exports (singleton is gone). Add Gemini text provider to the barrel if needed. Ensure `getTextProvider` and `getImageProvider` signatures are updated.
+In `src/lib/schemas/api/weapon-response.ts`, add optional model fields:
 
-Check if any test files import `resetTextProvider` or `resetImageProvider` — if so, remove those calls (they're no-ops now since there's no singleton).
+```typescript
+export const weaponResponseSchema = z.object({
+  // ... existing fields ...
+  textModel: z.nullable(z.string()),
+  imageModel: z.nullable(z.string()),
+})
+```
 
-**Step 2: Run all tests**
+**Step 2: Update transformer**
+
+In `src/lib/api/transform.ts`, extract model fields from the DB record:
+
+```typescript
+export function toWeaponResponse(weapon: Weapon): WeaponResponse {
+  return {
+    // ... existing fields ...
+    textModel: weapon.textModel ?? null,
+    imageModel: weapon.imageModel ?? null,
+  }
+}
+```
+
+> The DB already has `textModel` and `imageModel` columns (see `prisma/schema.prisma`). The orchestrator writes to these columns. Use `weapon.textModel` directly — no need to parse from `options` JSON.
+
+**Step 3: Run all tests**
 
 Run: `npx vitest run`
-Expected: All PASS
+Expected: All PASS (update any test fixtures that assert on the full response shape)
 
-**Step 3: Commit**
+**Step 4: Verify type checking**
+
+Run: `npx tsc --noEmit`
+Expected: No errors
+
+**Step 5: Commit**
 
 ```bash
-git add src/lib/providers/index.ts
-git commit -m "chore: update provider barrel exports for per-request model selection"
+git add src/lib/schemas/api/weapon-response.ts src/lib/api/transform.ts
+git commit -m "feat: expose textModel and imageModel in weapon API response"
 ```
 
 ---
@@ -913,15 +1025,17 @@ Expected: No errors
 **Step 3: Manual smoke test**
 
 Run: `npm run dev`
-1. Open form, select different text/image models
-2. Generate a weapon — verify it completes
-3. Check weapon detail page — `textModel` and `imageModel` fields should show the selected models
-4. Try "Reroll Stats" — should use models from stored options
+1. Open form, select different text/image models — verify dropdowns show grouped options
+2. Generate a weapon — verify it completes without errors
+3. Check weapon detail page — the API response should include `textModel` and `imageModel` fields (verify in browser dev tools Network tab)
+4. Try "Reroll Stats" — should use models from stored options (check console/network)
 5. Try "New Image" — should use image model from stored options
+6. Submit with default models (no changes) — verify backward compatibility
 
 **Step 4: Final commit if any fixes needed**
 
 ```bash
-git add -A
+# Stage only files touched by this feature (avoid capturing unrelated changes)
+git add src/lib src/components src/app
 git commit -m "fix: address issues found during model selection smoke test"
 ```

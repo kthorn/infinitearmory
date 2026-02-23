@@ -1,7 +1,7 @@
 # Sci-Fi Weapon Extension Design
 
 **Date:** 2026-02-22
-**Status:** Draft
+**Status:** Refined
 
 ## Overview
 
@@ -16,7 +16,7 @@ Extend the Fantasy Weapon Generator to support sci-fi weapon categories: handhel
 | Mech detail level | Single card, integrated weapon systems listed in effects/rules | Consistent with existing card UX |
 | Fantasy rulesets | D&D 5e only (remove Pathfinder 2e, Generic) | Simplify |
 | Sci-fi rulesets | Generic Sci-Fi for handheld/turrets, BattleTech-inspired for mechs | Prompt changes per ruleset |
-| Art styles | Keep existing 6 + add sci-fi styles | Genre filters which styles are shown |
+| Art styles | Keep existing 6 + add sci-fi styles | Category filters which styles are shown |
 | Stat system | Hybrid — shared core fields, category-specific extras | Authentic sci-fi feel without losing consistency |
 
 ## Schema Design
@@ -45,7 +45,7 @@ FantasyWeaponSpec {
 }
 ```
 
-No changes to existing fantasy weapon behavior except adding the `category` discriminator field.
+Changes from existing fantasy weapon behavior: adding the `category` discriminator field and removing Pathfinder 2e / Generic rulesets (all fantasy weapons use `dnd5e`).
 
 ### Category: `scifi_handheld`
 
@@ -55,8 +55,8 @@ SciFiHandheldSpec {
   // shared base fields
   weaponClass: string          // "pistol", "rifle", "shotgun", "SMG", "sniper", "launcher", "blade"
   firingMode: "single" | "burst" | "auto" | "charge"
-  ammoCapacity?: number
-  energyCost?: number
+  ammoCapacity?: number        // 1-999 if present
+  energyCost?: number          // 1-100 if present
   range: "short" | "medium" | "long" | "extreme"
 }
 ```
@@ -69,8 +69,8 @@ TurretSpec {
   // shared base fields
   mountType: "fixed" | "swivel" | "tracking" | "orbital"
   firingMode: "single" | "burst" | "auto" | "charge"
-  ammoCapacity?: number
-  energyCost?: number
+  ammoCapacity?: number        // 1-9999 if present
+  energyCost?: number          // 1-100 if present
   range: "medium" | "long" | "extreme"
   rateOfFire: string          // e.g., "3 rounds/turn", "sustained beam"
   deploymentRequirements?: string // power source, crew, setup time
@@ -84,21 +84,21 @@ BattleTech-inspired stat block:
 ```typescript
 MechSpec {
   category: "mech"
-  // shared base fields (damage = primary weapon damage)
+  // shared base fields (damage = first weaponSystems entry's damage, used for card display)
   mechClass: "light" | "medium" | "heavy" | "assault"
-  tonnage: number
-  armorRating: number
-  heatCapacity: number
+  tonnage: number              // 20-100, by mechClass (light: 20-35, medium: 40-55, heavy: 60-75, assault: 80-100)
+  armorRating: number          // 1-500
+  heatCapacity: number         // 1-50
   mobility: {
-    speed: number             // movement units per turn
+    speed: number             // 1-20, movement units per turn
     jumpJets: boolean
   }
   weaponSystems: Array<{
     name: string
     damage: { dice: string, type: DamageType }
     location: string          // "left arm", "right torso", "center torso", etc.
-    heatGenerated: number
-  }>                          // max 6
+    heatGenerated: number     // 0-20
+  }>                          // 1-6 (min 1 required; base damage derives from first entry)
   specialSystems: string[]    // "ECM Suite", "Targeting Computer", etc.
 }
 ```
@@ -156,7 +156,7 @@ Add sci-fi styles:
 - `cyberpunk` — neon-lit, gritty, high-tech-low-life aesthetic
 - `hard_scifi` — clean, utilitarian, NASA/SpaceX industrial design feel
 
-Genre determines which styles are available:
+Category determines which styles are available:
 - Fantasy: `realistic`, `fantasy_art`, `dark_fantasy`, `anime`, `pixel_art`, `watercolor`
 - Sci-Fi/Mech: `realistic`, `cyberpunk`, `hard_scifi`, `technical_blueprint`, `anime`, `pixel_art`
 
@@ -225,5 +225,8 @@ The existing 3-step pipeline (text → image → storage) stays the same. Change
 ## Migration
 
 Existing weapons have no `category` field. Handle with:
-- Default to `"fantasy_weapon"` when `category` is absent in stored `weaponSpec` JSON
-- No backfill migration needed — just handle missing field at read time
+
+1. **Pre-validation normalization**: Before passing stored `weaponSpec` through `z.discriminatedUnion`, inject `category: "fantasy_weapon"` if the field is absent. This must happen before Zod validation, not after.
+2. **Legacy ruleset mapping**: Existing `options.ruleset` values (`pathfinder2e`, `generic`) map to `dnd5e` on read. The category dropdown defaults to `fantasy_weapon` for all legacy records.
+3. **Legacy options normalization**: Inject `options.category = "fantasy_weapon"` for legacy records missing this field, so server-side generation dispatch routes correctly.
+4. No backfill migration needed — normalize at read time and persist the normalized version on next save/regenerate.

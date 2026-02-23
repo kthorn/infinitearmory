@@ -8,6 +8,8 @@
 
 **Tech Stack:** React 19 MediaRecorder API, Next.js 16 route handler, OpenAI SDK (`openai` ^6.22.0, already installed), Vitest for tests.
 
+**Status:** Refined
+
 **Design Doc:** `docs/plans/2026-02-22-speech-to-text-design.md`
 
 ---
@@ -35,21 +37,24 @@ vi.mock('@/lib/env', () => ({
 
 // Mock OpenAI
 const mockCreate = vi.fn()
+const mockToFile = vi.fn((blob: Blob, name: string) => ({ blob, name }))
 vi.mock('openai', () => ({
   default: class {
     audio = { transcriptions: { create: mockCreate } }
   },
+  toFile: (...args: any[]) => mockToFile(...args),
 }))
 
+import { NextRequest } from 'next/server'
 import { POST } from '../route'
 
-function makeRequest(body?: FormData): Request {
+function makeRequest(body?: FormData): NextRequest {
   if (!body) {
-    return new Request('http://localhost/api/transcribe', {
+    return new NextRequest(new URL('http://localhost/api/transcribe'), {
       method: 'POST',
     })
   }
-  return new Request('http://localhost/api/transcribe', {
+  return new NextRequest(new URL('http://localhost/api/transcribe'), {
     method: 'POST',
     body,
   })
@@ -60,12 +65,49 @@ describe('POST /api/transcribe', () => {
     vi.clearAllMocks()
   })
 
+  it('returns 500 when OPENAI_API_KEY is not set', async () => {
+    const { env } = await import('@/lib/env')
+    const original = env.OPENAI_API_KEY
+    env.OPENAI_API_KEY = ''
+
+    try {
+      const form = new FormData()
+      const audioBlob = new Blob(['fake-audio'], { type: 'audio/webm' })
+      form.append('audio', audioBlob, 'recording.webm')
+
+      const res = await POST(makeRequest(form))
+      expect(res.status).toBe(500)
+    } finally {
+      env.OPENAI_API_KEY = original
+    }
+  })
+
   it('returns 400 when no audio file is provided', async () => {
     const form = new FormData()
-    const res = await POST(makeRequest(form) as any)
+    const res = await POST(makeRequest(form))
     expect(res.status).toBe(400)
     const data = await res.json()
     expect(data.error).toMatch(/audio/i)
+  })
+
+  it('returns 400 when file is not audio', async () => {
+    const form = new FormData()
+    const textBlob = new Blob(['not audio'], { type: 'text/plain' })
+    form.append('audio', textBlob, 'file.txt')
+
+    const res = await POST(makeRequest(form))
+    expect(res.status).toBe(400)
+    const data = await res.json()
+    expect(data.error).toMatch(/audio/i)
+  })
+
+  it('returns 413 when file exceeds 25MB', async () => {
+    const form = new FormData()
+    const largeBlob = new Blob([new ArrayBuffer(26 * 1024 * 1024)], { type: 'audio/webm' })
+    form.append('audio', largeBlob, 'recording.webm')
+
+    const res = await POST(makeRequest(form))
+    expect(res.status).toBe(413)
   })
 
   it('returns transcribed text on success', async () => {
@@ -75,21 +117,22 @@ describe('POST /api/transcribe', () => {
     const audioBlob = new Blob(['fake-audio'], { type: 'audio/webm' })
     form.append('audio', audioBlob, 'recording.webm')
 
-    const res = await POST(makeRequest(form) as any)
+    const res = await POST(makeRequest(form))
     expect(res.status).toBe(200)
     const data = await res.json()
     expect(data.text).toBe('a flaming sword of destiny')
   })
 
-  it('calls OpenAI with whisper-1 model', async () => {
+  it('calls OpenAI with whisper-1 model and toFile', async () => {
     mockCreate.mockResolvedValue({ text: 'test' })
 
     const form = new FormData()
     const audioBlob = new Blob(['fake-audio'], { type: 'audio/webm' })
     form.append('audio', audioBlob, 'recording.webm')
 
-    await POST(makeRequest(form) as any)
+    await POST(makeRequest(form))
 
+    expect(mockToFile).toHaveBeenCalled()
     expect(mockCreate).toHaveBeenCalledWith(
       expect.objectContaining({ model: 'whisper-1' })
     )
@@ -102,7 +145,7 @@ describe('POST /api/transcribe', () => {
     const audioBlob = new Blob(['fake-audio'], { type: 'audio/webm' })
     form.append('audio', audioBlob, 'recording.webm')
 
-    const res = await POST(makeRequest(form) as any)
+    const res = await POST(makeRequest(form))
     expect(res.status).toBe(500)
   })
 })
@@ -121,7 +164,7 @@ Create `src/app/api/transcribe/route.ts`:
 import { NextRequest } from 'next/server'
 import OpenAI, { toFile } from 'openai'
 import { env } from '@/lib/env'
-import { badRequest, serverError } from '@/lib/api'
+import { badRequest, errorResponse, serverError } from '@/lib/api'
 
 const MAX_FILE_SIZE = 25 * 1024 * 1024 // 25MB (Whisper limit)
 
@@ -138,13 +181,18 @@ export async function POST(request: NextRequest) {
       return badRequest('Missing audio file. Send a "audio" field with an audio blob.')
     }
 
+    if (!audioFile.type.startsWith('audio/')) {
+      return badRequest('Invalid file type. Must be an audio file.')
+    }
+
     if (audioFile.size > MAX_FILE_SIZE) {
-      return badRequest(`Audio file too large. Maximum size is 25MB.`)
+      return errorResponse('Audio file too large. Maximum size is 25MB.', 413)
     }
 
     const client = new OpenAI({ apiKey: env.OPENAI_API_KEY })
 
-    const file = await toFile(audioFile, 'recording.webm')
+    const ext = audioFile.type.split('/')[1]?.split(';')[0] || 'webm'
+    const file = await toFile(audioFile, `recording.${ext}`)
 
     const transcription = await client.audio.transcriptions.create({
       model: 'whisper-1',
@@ -162,7 +210,7 @@ export async function POST(request: NextRequest) {
 **Step 4: Run test to verify it passes**
 
 Run: `npx vitest run src/app/api/transcribe/__tests__/route.test.ts`
-Expected: PASS (all 4 tests)
+Expected: PASS (all 7 tests)
 
 **Step 5: Commit**
 
@@ -179,12 +227,19 @@ git commit -m "feat: add /api/transcribe route for Whisper speech-to-text"
 - Create: `src/hooks/use-audio-recorder.ts`
 - Test: `src/hooks/__tests__/use-audio-recorder.test.ts`
 
+**Step 0: Install test dependencies**
+
+```bash
+npm install -D @testing-library/react jsdom
+```
+
 **Step 1: Write the failing test**
 
 Create `src/hooks/__tests__/use-audio-recorder.test.ts`:
 
 ```typescript
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+// @vitest-environment jsdom
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { renderHook, act } from '@testing-library/react'
 import { useAudioRecorder } from '../use-audio-recorder'
 
@@ -226,6 +281,10 @@ beforeEach(() => {
   })
 
   global.MediaRecorder = MockMediaRecorder as any
+})
+
+afterEach(() => {
+  vi.useRealTimers()
 })
 
 describe('useAudioRecorder', () => {
@@ -294,7 +353,7 @@ describe('useAudioRecorder', () => {
   })
 
   it('sets error if getUserMedia fails', async () => {
-    mockGetUserMedia.mockRejectedValue(new DOMException('Permission denied'))
+    mockGetUserMedia.mockRejectedValue(new DOMException('Permission denied', 'NotAllowedError'))
 
     const { result } = renderHook(() => useAudioRecorder())
 
@@ -311,12 +370,7 @@ describe('useAudioRecorder', () => {
 **Step 2: Run test to verify it fails**
 
 Run: `npx vitest run src/hooks/__tests__/use-audio-recorder.test.ts`
-Expected: FAIL — module not found
-
-**Note:** You may need to install `@testing-library/react` as a dev dependency:
-```bash
-npm install -D @testing-library/react
-```
+Expected: FAIL — module `../use-audio-recorder` not found
 
 **Step 3: Write the implementation**
 
@@ -380,6 +434,10 @@ export function useAudioRecorder(): UseAudioRecorderReturn {
         setDuration((d) => d + 1)
       }, 1000)
     } catch (err) {
+      // Clean up any acquired stream on failure
+      streamRef.current?.getTracks().forEach((t) => t.stop())
+      streamRef.current = null
+
       const message =
         err instanceof DOMException && err.name === 'NotAllowedError'
           ? 'Microphone permission denied'
@@ -429,7 +487,7 @@ Expected: PASS (all 6 tests)
 **Step 5: Commit**
 
 ```bash
-git add src/hooks/use-audio-recorder.ts src/hooks/__tests__/use-audio-recorder.test.ts
+git add package.json package-lock.json src/hooks/use-audio-recorder.ts src/hooks/__tests__/use-audio-recorder.test.ts
 git commit -m "feat: add useAudioRecorder hook for MediaRecorder integration"
 ```
 
@@ -447,7 +505,7 @@ Create `src/components/microphone-button.tsx`:
 ```tsx
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useAudioRecorder } from '@/hooks/use-audio-recorder'
 import { Spinner } from './ui'
 
@@ -460,11 +518,17 @@ export function MicrophoneButton({ onTranscription, disabled }: MicrophoneButton
   const { isRecording, duration, startRecording, stopRecording, error } = useAudioRecorder()
   const [isTranscribing, setIsTranscribing] = useState(false)
   const [transcribeError, setTranscribeError] = useState<string | null>(null)
+  const [supported, setSupported] = useState(false)
 
-  // Hide if MediaRecorder is not available
-  if (typeof window !== 'undefined' && !navigator.mediaDevices) {
-    return null
-  }
+  useEffect(() => {
+    setSupported(
+      typeof window !== 'undefined' &&
+      !!navigator.mediaDevices?.getUserMedia &&
+      typeof MediaRecorder !== 'undefined'
+    )
+  }, [])
+
+  if (!supported) return null
 
   const formatDuration = (seconds: number) => {
     const m = Math.floor(seconds / 60)
@@ -577,7 +641,16 @@ git commit -m "feat: add MicrophoneButton component for voice input"
 ### Task 4: Integrate into WeaponForm
 
 **Files:**
-- Modify: `src/components/weapon-form.tsx:1-113`
+- Modify: `src/lib/schemas/api/create-weapon.ts` (bump max to 2000)
+- Modify: `src/components/weapon-form.tsx`
+
+**Step 0: Update prompt character limit to 2000**
+
+In `src/lib/schemas/api/create-weapon.ts`, change `.max(500)` to `.max(2000)`:
+
+```typescript
+prompt: z.string().trim().min(3).max(2000),
+```
 
 **Step 1: Add the MicrophoneButton import and integrate**
 
@@ -587,7 +660,7 @@ In `src/components/weapon-form.tsx`, add the import:
 import { MicrophoneButton } from './microphone-button'
 ```
 
-Replace the textarea container `<div>` (lines 62-75) with:
+Replace the existing `<div>` containing the `<label htmlFor="weapon-prompt">`, `<textarea>`, and character count `<p>` with:
 
 ```tsx
 <div>
@@ -598,21 +671,24 @@ Replace the textarea container `<div>` (lines 62-75) with:
       value={prompt}
       onChange={(e) => setPrompt(e.target.value)}
       placeholder="Describe your weapon idea... (e.g., 'A sword made of crystallized starlight, wielded by an ancient elven queen')"
-      className="w-full px-4 py-3 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent min-h-[100px] resize-y"
+      className="w-full px-4 py-3 pb-10 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent min-h-[100px] resize-y"
       required
       minLength={3}
-      maxLength={500}
+      maxLength={2000}
     />
     <div className="absolute bottom-2 right-2">
       <MicrophoneButton
         onTranscription={(text) => {
-          setPrompt((prev) => (prev ? `${prev} ${text}` : text))
+          setPrompt((prev) => {
+            const combined = prev ? `${prev} ${text}` : text
+            return combined.slice(0, 2000)
+          })
         }}
         disabled={loading}
       />
     </div>
   </div>
-  <p className="mt-1 text-sm text-slate-500">{prompt.length}/500 characters</p>
+  <p className="mt-1 text-sm text-slate-500">{prompt.length}/2000 characters</p>
 </div>
 ```
 
@@ -634,7 +710,7 @@ Verify:
 **Step 4: Commit**
 
 ```bash
-git add src/components/weapon-form.tsx
+git add src/lib/schemas/api/create-weapon.ts src/components/weapon-form.tsx
 git commit -m "feat: integrate speech-to-text into weapon concept form"
 ```
 
@@ -642,15 +718,39 @@ git commit -m "feat: integrate speech-to-text into weapon concept form"
 
 ## Summary
 
-| Task | What | Files | Est. |
-|------|------|-------|------|
-| 1 | API route `/api/transcribe` | 2 new files (route + test) | 5 min |
-| 2 | `useAudioRecorder` hook | 2 new files (hook + test) | 5 min |
-| 3 | `MicrophoneButton` component | 1 new file | 3 min |
-| 4 | Integrate into `WeaponForm` | 1 modified file | 3 min |
+| Task | What | Files |
+|------|------|-------|
+| 1 | API route `/api/transcribe` | 2 new files (route + test) |
+| 2 | `useAudioRecorder` hook | 2 new files (hook + test) |
+| 3 | `MicrophoneButton` component | 1 new file |
+| 4 | Integrate into `WeaponForm` | 2 modified files (schema + form) |
+| 5 | Final verification | — |
 
-**Dependencies:** Task 4 depends on Tasks 1-3. Tasks 1 and 2 are independent and can be done in parallel. Task 3 depends on Task 2.
+**Dependencies:** Task 4 depends on Tasks 1-3. Tasks 1 and 2 are independent and can be done in parallel. Task 3 depends on Task 2. Task 5 depends on all others.
 
-**New dev dependency needed:** `@testing-library/react` (for hook tests in Task 2).
+**New dev dependencies needed:** `@testing-library/react`, `jsdom` (for hook tests in Task 2).
 
 **No new env vars needed** — uses existing `OPENAI_API_KEY`.
+
+---
+
+### Task 5: Final Verification
+
+**Step 1: Run full test suite**
+
+Run: `npx vitest run`
+Expected: All tests pass
+
+**Step 2: Type check**
+
+Run: `npx tsc --noEmit`
+Expected: No type errors
+
+**Step 3: Build**
+
+Run: `npm run build`
+Expected: Build succeeds
+
+**Step 4: Commit (if any fixes were needed)**
+
+Only if fixes were applied during verification.
