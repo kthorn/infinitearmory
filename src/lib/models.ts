@@ -65,6 +65,18 @@ export function getAllImageModels(): Array<ModelOption & { provider: string }> {
   )
 }
 
+export function getModelLabel(modelId: string): string {
+  for (const models of Object.values(TEXT_MODELS)) {
+    const found = models.find((m) => m.id === modelId)
+    if (found) return found.label
+  }
+  for (const models of Object.values(IMAGE_MODELS)) {
+    const found = models.find((m) => m.id === modelId)
+    if (found) return found.label
+  }
+  return modelId
+}
+
 export function getDefaultTextModel(): string {
   for (const models of Object.values(TEXT_MODELS)) {
     const def = models.find((m) => m.default)

@@ -1,12 +1,14 @@
 'use client'
 
 import { useState } from 'react'
+import { useRouter } from 'next/navigation'
 import Image from 'next/image'
 import ReactMarkdown from 'react-markdown'
 import { Button, Card, CardContent, CardFooter } from './ui'
 import { StatBlock } from './stat-block'
 import type { WeaponResponse } from '@/lib/schemas'
-import { CATEGORY_DISPLAY } from '@/lib/schemas'
+import { CATEGORY_DISPLAY, STYLE_DISPLAY } from '@/lib/schemas'
+import { getModelLabel } from '@/lib/models'
 
 interface WeaponCardProps {
   weapon: WeaponResponse
@@ -16,6 +18,7 @@ interface WeaponCardProps {
 }
 
 export function WeaponCard({ weapon, onRegenerateImage, onRerollStats, onDelete }: WeaponCardProps) {
+  const router = useRouter()
   const [regeneratingImage, setRegeneratingImage] = useState(false)
   const [rerollingStats, setRerollingStats] = useState(false)
   const [deleting, setDeleting] = useState(false)
@@ -60,6 +63,41 @@ export function WeaponCard({ weapon, onRegenerateImage, onRerollStats, onDelete 
     } finally {
       setDeleting(false)
     }
+  }
+
+  function handleDownloadJson() {
+    const data = {
+      id: weapon.id,
+      createdAt: weapon.createdAt,
+      userPrompt: weapon.userPrompt,
+      options: weapon.options,
+      textModel: weapon.textModel,
+      imageModel: weapon.imageModel,
+      weaponSpec: weapon.weaponSpec,
+      descriptionMd: weapon.descriptionMd,
+    }
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    const safeName = (weapon.weaponSpec?.name ?? weapon.id).replace(/[^a-zA-Z0-9_-]/g, '_')
+    a.download = `${safeName}.json`
+    a.click()
+    setTimeout(() => URL.revokeObjectURL(url), 100)
+  }
+
+  function handleRemix() {
+    const params = new URLSearchParams()
+    params.set('prompt', weapon.userPrompt)
+    if (weapon.options?.category) params.set('category', String(weapon.options.category))
+    if (weapon.options?.style) params.set('style', String(weapon.options.style))
+    if (weapon.options?.rarity) params.set('rarity', String(weapon.options.rarity))
+    // Use top-level model fields (canonical, set by orchestrator) over options (user input)
+    const textModelId = weapon.textModel ?? (weapon.options?.textModel ? String(weapon.options.textModel) : null)
+    const imageModelId = weapon.imageModel ?? (weapon.options?.imageModel ? String(weapon.options.imageModel) : null)
+    if (textModelId) params.set('textModel', textModelId)
+    if (imageModelId) params.set('imageModel', imageModelId)
+    router.push(`/?${params.toString()}`)
   }
 
   if (!weapon.weaponSpec) {
@@ -173,6 +211,20 @@ export function WeaponCard({ weapon, onRegenerateImage, onRerollStats, onDelete 
                   Reroll Stats
                 </Button>
               )}
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={handleDownloadJson}
+              >
+                Download JSON
+              </Button>
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={handleRemix}
+              >
+                Remix
+              </Button>
               {onDelete && (
                 <>
                   <div className="flex-1" />
@@ -191,6 +243,27 @@ export function WeaponCard({ weapon, onRegenerateImage, onRerollStats, onDelete 
             </CardFooter>
           )}
         </div>
+      </div>
+      {/* Generation metadata */}
+      <div className="px-4 py-2 bg-slate-800/50 border-b border-slate-700 space-y-1">
+        <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-400">
+          {weapon.textModel && (
+            <span title="Text model">
+              <span className="text-slate-500">Text:</span> {getModelLabel(weapon.textModel)}
+            </span>
+          )}
+          {weapon.imageModel && (
+            <span title="Image model">
+              <span className="text-slate-500">Image:</span> {getModelLabel(weapon.imageModel)}
+            </span>
+          )}
+          {typeof weapon.options?.style === 'string' && (
+            <span title="Art style">
+              <span className="text-slate-500">Style:</span> {STYLE_DISPLAY[weapon.options.style as keyof typeof STYLE_DISPLAY] ?? weapon.options.style}
+            </span>
+          )}
+        </div>
+        <p className="text-xs text-slate-500 italic">&ldquo;{weapon.userPrompt}&rdquo;</p>
       </div>
     </Card>
   )

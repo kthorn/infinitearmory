@@ -11,9 +11,10 @@ import {
   CATEGORY_STYLES,
   CATEGORY_RULESET,
   CATEGORY_DEFAULT_STYLE,
+  categorySchema,
 } from '@/lib/schemas'
 import type { Category, Style } from '@/lib/schemas'
-import { TEXT_MODELS, IMAGE_MODELS, PROVIDER_DISPLAY, getDefaultTextModel, getDefaultImageModel } from '@/lib/models'
+import { TEXT_MODELS, IMAGE_MODELS, PROVIDER_DISPLAY, getDefaultTextModel, getDefaultImageModel, getAllTextModels, getAllImageModels } from '@/lib/models'
 
 const categoryOptions = Object.entries(CATEGORY_DISPLAY).map(([value, label]) => ({ value, label }))
 const rarityOptions = [
@@ -43,11 +44,33 @@ export function WeaponForm() {
   const [error, setError] = useState<string | null>(null)
 
   const [prompt, setPrompt] = useState(searchParams.get('prompt') ?? '')
-  const [category, setCategory] = useState<Category>('fantasy_weapon')
-  const [style, setStyle] = useState<Style>('fantasy_art')
-  const [rarity, setRarity] = useState('')
-  const [textModel, setTextModel] = useState(getDefaultTextModel())
-  const [imageModel, setImageModel] = useState(getDefaultImageModel())
+
+  // Validate category param against schema to avoid runtime crash in CATEGORY_STYLES lookup
+  const categoryParam = searchParams.get('category')
+  const validCategory = categoryParam && categorySchema.safeParse(categoryParam).success
+    ? (categoryParam as Category)
+    : 'fantasy_weapon'
+  const [category, setCategory] = useState<Category>(validCategory)
+
+  const initialStyle = searchParams.get('style') as Style | null
+  const [style, setStyle] = useState<Style>(
+    initialStyle && CATEGORY_STYLES[validCategory]?.includes(initialStyle)
+      ? initialStyle
+      : CATEGORY_DEFAULT_STYLE[validCategory] ?? 'fantasy_art'
+  )
+  const [rarity, setRarity] = useState(searchParams.get('rarity') ?? '')
+
+  // Validate model params against known model IDs
+  const validTextModelIds = getAllTextModels().map((m) => m.id)
+  const validImageModelIds = getAllImageModels().map((m) => m.id)
+  const textModelParam = searchParams.get('textModel')
+  const imageModelParam = searchParams.get('imageModel')
+  const [textModel, setTextModel] = useState(
+    textModelParam && validTextModelIds.includes(textModelParam) ? textModelParam : getDefaultTextModel()
+  )
+  const [imageModel, setImageModel] = useState(
+    imageModelParam && validImageModelIds.includes(imageModelParam) ? imageModelParam : getDefaultImageModel()
+  )
 
   function handleCategoryChange(newCategory: Category) {
     setCategory(newCategory)
