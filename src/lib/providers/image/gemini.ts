@@ -15,10 +15,9 @@ export function createGeminiImageProvider(model?: string): ImageProvider {
 
   return {
     async generateImage(prompt: string): Promise<ImageGenerationResult> {
-      // aspectRatio is supported by the API but missing from @google/genai types
       const config = {
         responseModalities: ['Text', 'Image'],
-        aspectRatio: '1:1',
+        imageConfig: { aspectRatio: '1:1' },
       }
       const response = await ai.models.generateContent({
         model: activeModel,
