@@ -31,8 +31,22 @@ export function WeaponDetailClient({ initialWeapon }: WeaponDetailClientProps) {
   }, [weapon.id, weapon.status])
 
   useEffect(() => {
-    fetchVersions()
-  }, [fetchVersions])
+    let cancelled = false
+    async function load() {
+      if (weapon.status !== 'done') return
+      try {
+        const response = await fetch(`/api/weapons/${weapon.id}/versions`)
+        if (response.ok && !cancelled) {
+          const data = await response.json()
+          setVersions(data.versions)
+        }
+      } catch {
+        // Silently fail
+      }
+    }
+    load()
+    return () => { cancelled = true }
+  }, [weapon.id, weapon.status])
 
   async function handleRegenerateImage() {
     const response = await fetch(`/api/weapons/${weapon.id}/regenerate-image`, { method: 'POST' })
