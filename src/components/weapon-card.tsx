@@ -245,22 +245,25 @@ export function WeaponCard({ weapon, onRegenerateImage, onRerollStats, onDelete 
         </div>
       </div>
       {/* Generation metadata */}
-      <div className="px-4 py-2 bg-slate-800/50 border-b border-slate-700 flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-400">
-        {weapon.textModel && (
-          <span title="Text model">
-            <span className="text-slate-500">Text:</span> {getModelLabel(weapon.textModel)}
-          </span>
-        )}
-        {weapon.imageModel && (
-          <span title="Image model">
-            <span className="text-slate-500">Image:</span> {getModelLabel(weapon.imageModel)}
-          </span>
-        )}
-        {typeof weapon.options?.style === 'string' && (
-          <span title="Art style">
-            <span className="text-slate-500">Style:</span> {STYLE_DISPLAY[weapon.options.style as keyof typeof STYLE_DISPLAY] ?? weapon.options.style}
-          </span>
-        )}
+      <div className="px-4 py-2 bg-slate-800/50 border-b border-slate-700 space-y-1">
+        <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-400">
+          {weapon.textModel && (
+            <span title="Text model">
+              <span className="text-slate-500">Text:</span> {getModelLabel(weapon.textModel)}
+            </span>
+          )}
+          {weapon.imageModel && (
+            <span title="Image model">
+              <span className="text-slate-500">Image:</span> {getModelLabel(weapon.imageModel)}
+            </span>
+          )}
+          {typeof weapon.options?.style === 'string' && (
+            <span title="Art style">
+              <span className="text-slate-500">Style:</span> {STYLE_DISPLAY[weapon.options.style as keyof typeof STYLE_DISPLAY] ?? weapon.options.style}
+            </span>
+          )}
+        </div>
+        <p className="text-xs text-slate-500 italic">&ldquo;{weapon.userPrompt}&rdquo;</p>
       </div>
     </Card>
   )
