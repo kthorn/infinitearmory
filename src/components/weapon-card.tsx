@@ -63,6 +63,27 @@ export function WeaponCard({ weapon, onRegenerateImage, onRerollStats, onDelete 
     }
   }
 
+  function handleDownloadJson() {
+    const data = {
+      id: weapon.id,
+      createdAt: weapon.createdAt,
+      userPrompt: weapon.userPrompt,
+      options: weapon.options,
+      textModel: weapon.textModel,
+      imageModel: weapon.imageModel,
+      weaponSpec: weapon.weaponSpec,
+      descriptionMd: weapon.descriptionMd,
+    }
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    const safeName = (weapon.weaponSpec?.name ?? weapon.id).replace(/[^a-zA-Z0-9_-]/g, '_')
+    a.download = `${safeName}.json`
+    a.click()
+    setTimeout(() => URL.revokeObjectURL(url), 100)
+  }
+
   if (!weapon.weaponSpec) {
     return (
       <Card className="max-w-4xl mx-auto">
@@ -174,6 +195,13 @@ export function WeaponCard({ weapon, onRegenerateImage, onRerollStats, onDelete 
                   Reroll Stats
                 </Button>
               )}
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={handleDownloadJson}
+              >
+                Download JSON
+              </Button>
               {onDelete && (
                 <>
                   <div className="flex-1" />
