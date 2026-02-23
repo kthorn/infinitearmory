@@ -1,9 +1,10 @@
 'use client'
 
+import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { WeaponCard, GenerationProgress, Button } from '@/components'
 import { useWeaponPolling } from '@/hooks'
-import type { WeaponResponse } from '@/lib/schemas'
+import type { WeaponResponse, WeaponVersion } from '@/lib/schemas'
 
 interface WeaponDetailClientProps {
   initialWeapon: WeaponResponse
@@ -12,8 +13,26 @@ interface WeaponDetailClientProps {
 export function WeaponDetailClient({ initialWeapon }: WeaponDetailClientProps) {
   const router = useRouter()
   const { weapon, error: pollingError, refetch } = useWeaponPolling({ initialWeapon })
+  const [versions, setVersions] = useState<WeaponVersion[]>([])
 
   const isGenerating = weapon.status !== 'done' && weapon.status !== 'error'
+
+  const fetchVersions = useCallback(async () => {
+    if (weapon.status !== 'done') return
+    try {
+      const response = await fetch(`/api/weapons/${weapon.id}/versions`)
+      if (response.ok) {
+        const data = await response.json()
+        setVersions(data.versions)
+      }
+    } catch {
+      // Silently fail — version strip is non-critical
+    }
+  }, [weapon.id, weapon.status])
+
+  useEffect(() => {
+    fetchVersions()
+  }, [fetchVersions])
 
   async function handleRegenerateImage() {
     const response = await fetch(`/api/weapons/${weapon.id}/regenerate-image`, { method: 'POST' })
@@ -22,6 +41,7 @@ export function WeaponDetailClient({ initialWeapon }: WeaponDetailClientProps) {
       throw new Error(data.error || 'Failed to regenerate image')
     }
     await refetch()
+    await fetchVersions()
   }
 
   async function handleRerollStats() {
@@ -40,6 +60,29 @@ export function WeaponDetailClient({ initialWeapon }: WeaponDetailClientProps) {
       throw new Error(data.error || 'Failed to delete weapon')
     }
     router.push('/weapons')
+  }
+
+  async function handlePromoteVersion(versionId: string) {
+    const response = await fetch(`/api/weapons/${weapon.id}/versions/${versionId}/promote`, {
+      method: 'POST',
+    })
+    if (!response.ok) {
+      const data = await response.json().catch(() => ({}))
+      throw new Error(data.error || 'Failed to promote version')
+    }
+    await refetch()
+    await fetchVersions()
+  }
+
+  async function handleDeleteVersion(versionId: string) {
+    const response = await fetch(`/api/weapons/${weapon.id}/versions/${versionId}`, {
+      method: 'DELETE',
+    })
+    if (!response.ok) {
+      const data = await response.json().catch(() => ({}))
+      throw new Error(data.error || 'Failed to delete version')
+    }
+    await fetchVersions()
   }
 
   if (isGenerating) {
@@ -71,9 +114,12 @@ export function WeaponDetailClient({ initialWeapon }: WeaponDetailClientProps) {
   return (
     <WeaponCard
       weapon={weapon}
+      versions={versions}
       onRegenerateImage={handleRegenerateImage}
       onRerollStats={handleRerollStats}
       onDelete={handleDelete}
+      onPromoteVersion={handlePromoteVersion}
+      onDeleteVersion={handleDeleteVersion}
     />
   )
 }
