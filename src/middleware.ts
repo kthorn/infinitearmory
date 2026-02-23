@@ -27,9 +27,12 @@ const DYNAMIC_RATE_LIMITED_PATHS = [
 ]
 
 export function middleware(request: NextRequest) {
-  resetIdleTimer()
-
   const path = request.nextUrl.pathname
+
+  // Don't reset idle timer for health checks (Fly.io polls every 30s)
+  if (path !== '/api/health') {
+    resetIdleTimer()
+  }
   const method = request.method
 
   // Determine if this route requires auth
