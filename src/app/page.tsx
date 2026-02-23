@@ -1,3 +1,4 @@
+import { Suspense } from 'react'
 import Link from 'next/link'
 import { WeaponForm } from '@/components'
 
@@ -13,7 +14,9 @@ export default function HomePage() {
           </p>
         </div>
 
-        <WeaponForm />
+        <Suspense>
+          <WeaponForm />
+        </Suspense>
 
         <div className="text-center mt-8">
           <Link
