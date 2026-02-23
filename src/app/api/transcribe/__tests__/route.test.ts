@@ -15,7 +15,7 @@ vi.mock('openai', () => ({
   default: class {
     audio = { transcriptions: { create: mockCreate } }
   },
-  toFile: (...args: any[]) => mockToFile(...args),
+  toFile: (...args: [Blob, string]) => mockToFile(...args),
 }))
 
 import { NextRequest } from 'next/server'
