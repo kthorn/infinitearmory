@@ -30,7 +30,9 @@ const envSchema = z
     NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
   })
   .superRefine((data, ctx) => {
-    if (data.NODE_ENV === 'production' && !data.AUTH_PASSWORD) {
+    // Skip auth check during Next.js build phase (secrets aren't available at build time)
+    const isBuildPhase = process.env.NEXT_PHASE === 'phase-production-build'
+    if (data.NODE_ENV === 'production' && !data.AUTH_PASSWORD && !isBuildPhase) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         message: 'AUTH_PASSWORD is required in production to prevent unauthenticated access',
