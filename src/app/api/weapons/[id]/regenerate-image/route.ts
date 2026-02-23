@@ -54,7 +54,10 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     await regenerateImage(id, style)
 
     // Return updated weapon
-    const updated = await db.weapon.findUnique({ where: { id } })
+    const updated = await db.weapon.findUnique({
+      where: { id },
+      include: { _count: { select: { versions: true } } },
+    })
     if (!updated) {
       return notFound('Weapon was deleted during regeneration')
     }

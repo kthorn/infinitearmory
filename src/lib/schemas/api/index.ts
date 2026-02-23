@@ -2,8 +2,10 @@ export { createWeaponRequestSchema, type CreateWeaponRequest } from './create-we
 export {
   weaponResponseSchema,
   weaponSummarySchema,
+  weaponVersionSchema,
   type WeaponResponse,
   type WeaponSummary,
+  type WeaponVersion,
 } from './weapon-response'
 export {
   listWeaponsQuerySchema,

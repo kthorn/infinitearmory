@@ -43,6 +43,7 @@ describe('DELETE /api/weapons/:id', () => {
       imageModel: null,
       textModel: null,
       promptVersion: 'v1',
+      activeVersionId: null,
     })
     vi.mocked(db.weapon.delete).mockResolvedValue({} as any)
 
@@ -70,6 +71,7 @@ describe('DELETE /api/weapons/:id', () => {
       imageModel: null,
       textModel: null,
       promptVersion: 'v1',
+      activeVersionId: null,
     })
     vi.mocked(db.weapon.delete).mockResolvedValue({} as any)
 

@@ -44,6 +44,7 @@ describe('POST /api/weapons', () => {
       imageModel: null,
       textModel: null,
       promptVersion: 'v1',
+      activeVersionId: null,
     }
     vi.mocked(db.weapon.create).mockResolvedValue(mockWeapon)
 

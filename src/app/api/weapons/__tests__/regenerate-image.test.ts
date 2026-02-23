@@ -31,6 +31,7 @@ const baseMockWeapon = {
   imageModel: null,
   textModel: null,
   promptVersion: 'v1',
+  activeVersionId: null,
 }
 
 function makeRequest(url: string, options?: RequestInit) {

@@ -13,7 +13,10 @@ interface RouteParams {
 export async function GET(_request: NextRequest, { params }: RouteParams) {
   try {
     const { id } = await params
-    const weapon = await db.weapon.findUnique({ where: { id } })
+    const weapon = await db.weapon.findUnique({
+      where: { id },
+      include: { _count: { select: { versions: true } } },
+    })
 
     if (!weapon) {
       return notFound('Weapon not found')
