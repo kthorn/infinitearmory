@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import { verifyBasicAuth, createAuthChallengeHeaders, rateLimiters } from '@/lib/auth'
+import { resetIdleTimer } from '@/lib/idle-shutdown'
 
 // Auth-required paths: only mutating API endpoints require auth.
 // The creation UI is public; auth is triggered when the user submits.
@@ -26,6 +27,8 @@ const DYNAMIC_RATE_LIMITED_PATHS = [
 ]
 
 export function middleware(request: NextRequest) {
+  resetIdleTimer()
+
   const path = request.nextUrl.pathname
   const method = request.method
 
