@@ -67,7 +67,7 @@ export function WeaponCard({ weapon, onRegenerateImage, onRerollStats }: WeaponC
               src={weapon.imageUrl}
               alt={weapon.weaponSpec.name}
               fill
-              className="object-cover"
+              className="object-contain"
               priority
             />
           ) : (
