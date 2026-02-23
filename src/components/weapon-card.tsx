@@ -12,11 +12,13 @@ interface WeaponCardProps {
   weapon: WeaponResponse
   onRegenerateImage?: () => Promise<void>
   onRerollStats?: () => Promise<void>
+  onDelete?: () => Promise<void>
 }
 
-export function WeaponCard({ weapon, onRegenerateImage, onRerollStats }: WeaponCardProps) {
+export function WeaponCard({ weapon, onRegenerateImage, onRerollStats, onDelete }: WeaponCardProps) {
   const [regeneratingImage, setRegeneratingImage] = useState(false)
   const [rerollingStats, setRerollingStats] = useState(false)
+  const [deleting, setDeleting] = useState(false)
   const [actionError, setActionError] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState<'stats' | 'lore'>('stats')
 
@@ -43,6 +45,20 @@ export function WeaponCard({ weapon, onRegenerateImage, onRerollStats }: WeaponC
       setActionError(err instanceof Error ? err.message : 'Failed to reroll stats')
     } finally {
       setRerollingStats(false)
+    }
+  }
+
+  async function handleDelete() {
+    if (!onDelete) return
+    if (!window.confirm('Delete this weapon? This cannot be undone.')) return
+    setDeleting(true)
+    setActionError(null)
+    try {
+      await onDelete()
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : 'Failed to delete weapon')
+    } finally {
+      setDeleting(false)
     }
   }
 
@@ -133,7 +149,7 @@ export function WeaponCard({ weapon, onRegenerateImage, onRerollStats }: WeaponC
           )}
 
           {/* Actions */}
-          {(onRegenerateImage || onRerollStats) && (
+          {(onRegenerateImage || onRerollStats || onDelete) && (
             <CardFooter className="flex gap-3">
               {onRegenerateImage && (
                 <Button
@@ -156,6 +172,21 @@ export function WeaponCard({ weapon, onRegenerateImage, onRerollStats }: WeaponC
                 >
                   Reroll Stats
                 </Button>
+              )}
+              {onDelete && (
+                <>
+                  <div className="flex-1" />
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={handleDelete}
+                    loading={deleting}
+                    disabled={regeneratingImage || rerollingStats}
+                    className="text-red-400 hover:text-red-300 hover:bg-red-900/30"
+                  >
+                    Delete
+                  </Button>
+                </>
               )}
             </CardFooter>
           )}

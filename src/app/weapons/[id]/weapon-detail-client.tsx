@@ -33,6 +33,15 @@ export function WeaponDetailClient({ initialWeapon }: WeaponDetailClientProps) {
     router.refresh()
   }
 
+  async function handleDelete() {
+    const response = await fetch(`/api/weapons/${weapon.id}`, { method: 'DELETE' })
+    if (!response.ok) {
+      const data = await response.json().catch(() => ({}))
+      throw new Error(data.error || 'Failed to delete weapon')
+    }
+    router.push('/weapons')
+  }
+
   if (isGenerating) {
     return (
       <div>
@@ -64,6 +73,7 @@ export function WeaponDetailClient({ initialWeapon }: WeaponDetailClientProps) {
       weapon={weapon}
       onRegenerateImage={handleRegenerateImage}
       onRerollStats={handleRerollStats}
+      onDelete={handleDelete}
     />
   )
 }
