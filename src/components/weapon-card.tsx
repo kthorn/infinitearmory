@@ -14,8 +14,8 @@ import { getModelLabel } from '@/lib/models'
 interface WeaponCardProps {
   weapon: WeaponResponse
   versions?: WeaponVersion[]
-  onRegenerateImage?: () => Promise<void>
-  onRerollStats?: () => Promise<void>
+  onRegenerateImage?: (guidance?: string) => Promise<void>
+  onRerollStats?: (guidance?: string) => Promise<void>
   onDelete?: () => Promise<void>
   onPromoteVersion?: (versionId: string) => Promise<void>
   onDeleteVersion?: (versionId: string) => Promise<void>
@@ -36,13 +36,17 @@ export function WeaponCard({
   const [deleting, setDeleting] = useState(false)
   const [actionError, setActionError] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState<'stats' | 'lore'>('stats')
+  const [imageGuidance, setImageGuidance] = useState('')
+  const [statsGuidance, setStatsGuidance] = useState('')
 
   async function handleRegenerateImage() {
     if (!onRegenerateImage) return
     setRegeneratingImage(true)
     setActionError(null)
     try {
-      await onRegenerateImage()
+      const guidance = imageGuidance.trim() || undefined
+      await onRegenerateImage(guidance)
+      setImageGuidance('')
     } catch (err) {
       setActionError(err instanceof Error ? err.message : 'Failed to regenerate image')
     } finally {
@@ -55,7 +59,9 @@ export function WeaponCard({
     setRerollingStats(true)
     setActionError(null)
     try {
-      await onRerollStats()
+      const guidance = statsGuidance.trim() || undefined
+      await onRerollStats(guidance)
+      setStatsGuidance('')
     } catch (err) {
       setActionError(err instanceof Error ? err.message : 'Failed to reroll stats')
     } finally {
@@ -200,58 +206,81 @@ export function WeaponCard({
 
           {/* Actions */}
           {(onRegenerateImage || onRerollStats || onDelete) && (
-            <CardFooter className="flex gap-3">
+            <CardFooter className="flex flex-col gap-3">
+              {/* Image refinement */}
               {onRegenerateImage && (
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  onClick={handleRegenerateImage}
-                  loading={regeneratingImage}
-                  disabled={rerollingStats}
-                >
-                  New Image
-                </Button>
-              )}
-              {onRerollStats && (
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  onClick={handleRerollStats}
-                  loading={rerollingStats}
-                  disabled={regeneratingImage}
-                >
-                  Reroll Stats
-                </Button>
-              )}
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={handleDownloadJson}
-              >
-                Download JSON
-              </Button>
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={handleRemix}
-              >
-                Remix
-              </Button>
-              {onDelete && (
-                <>
-                  <div className="flex-1" />
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={handleDelete}
-                    loading={deleting}
+                <div className="flex gap-2 w-full">
+                  <input
+                    type="text"
+                    value={imageGuidance}
+                    onChange={(e) => setImageGuidance(e.target.value)}
+                    placeholder="Describe visual changes (leave blank for a fresh image)"
+                    aria-label="Image refinement guidance"
+                    maxLength={1000}
                     disabled={regeneratingImage || rerollingStats}
-                    className="text-red-400 hover:text-red-300 hover:bg-red-900/30"
+                    className="flex-1 px-3 py-1.5 text-sm bg-slate-800 border border-slate-700 rounded text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
+                    onKeyDown={(e) => { if (e.key === 'Enter') handleRegenerateImage() }}
+                  />
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={handleRegenerateImage}
+                    loading={regeneratingImage}
+                    disabled={rerollingStats}
                   >
-                    Delete
+                    {imageGuidance.trim() ? 'Refine Image' : 'New Image'}
                   </Button>
-                </>
+                </div>
               )}
+              {/* Stats refinement */}
+              {onRerollStats && (
+                <div className="flex gap-2 w-full">
+                  <input
+                    type="text"
+                    value={statsGuidance}
+                    onChange={(e) => setStatsGuidance(e.target.value)}
+                    placeholder="Describe changes (leave blank to reroll from scratch)"
+                    aria-label="Stats refinement guidance"
+                    maxLength={1000}
+                    disabled={regeneratingImage || rerollingStats}
+                    className="flex-1 px-3 py-1.5 text-sm bg-slate-800 border border-slate-700 rounded text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
+                    onKeyDown={(e) => { if (e.key === 'Enter') handleRerollStats() }}
+                  />
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={handleRerollStats}
+                    loading={rerollingStats}
+                    disabled={regeneratingImage}
+                  >
+                    {statsGuidance.trim() ? 'Refine Stats' : 'Reroll Stats'}
+                  </Button>
+                </div>
+              )}
+              {/* Utility actions row */}
+              <div className="flex gap-3 w-full">
+                <Button variant="secondary" size="sm" onClick={handleDownloadJson}>
+                  Download JSON
+                </Button>
+                <Button variant="secondary" size="sm" onClick={handleRemix}>
+                  Remix
+                </Button>
+                {onDelete && (
+                  <>
+                    <div className="flex-1" />
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={handleDelete}
+                      loading={deleting}
+                      disabled={regeneratingImage || rerollingStats}
+                      className="text-red-400 hover:text-red-300 hover:bg-red-900/30"
+                    >
+                      Delete
+                    </Button>
+                  </>
+                )}
+              </div>
             </CardFooter>
           )}
         </div>

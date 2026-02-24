@@ -48,8 +48,12 @@ export function WeaponDetailClient({ initialWeapon }: WeaponDetailClientProps) {
     return () => { cancelled = true }
   }, [weapon.id, weapon.status, weapon.activeVersionId])
 
-  async function handleRegenerateImage() {
-    const response = await fetch(`/api/weapons/${weapon.id}/regenerate-image`, { method: 'POST' })
+  async function handleRegenerateImage(guidance?: string) {
+    const body = guidance ? JSON.stringify({ guidance }) : undefined
+    const response = await fetch(`/api/weapons/${weapon.id}/regenerate-image`, {
+      method: 'POST',
+      ...(body ? { body, headers: { 'Content-Type': 'application/json' } } : {}),
+    })
     if (!response.ok) {
       const data = await response.json().catch(() => ({}))
       throw new Error(data.error || 'Failed to regenerate image')
@@ -58,8 +62,12 @@ export function WeaponDetailClient({ initialWeapon }: WeaponDetailClientProps) {
     await fetchVersions()
   }
 
-  async function handleRerollStats() {
-    const response = await fetch(`/api/weapons/${weapon.id}/reroll-stats`, { method: 'POST' })
+  async function handleRerollStats(guidance?: string) {
+    const body = guidance ? JSON.stringify({ guidance }) : undefined
+    const response = await fetch(`/api/weapons/${weapon.id}/reroll-stats`, {
+      method: 'POST',
+      ...(body ? { body, headers: { 'Content-Type': 'application/json' } } : {}),
+    })
     if (!response.ok) {
       const data = await response.json().catch(() => ({}))
       throw new Error(data.error || 'Failed to reroll stats')
