@@ -82,4 +82,21 @@ describe('POST /api/weapons/:id/regenerate-image', () => {
 
     expect(res.status).toBe(400)
   })
+
+  it('accepts optional guidance in request body', async () => {
+    const { regenerateImage } = await import('@/lib/generation')
+    vi.mocked(db.weapon.findUnique)
+      .mockResolvedValueOnce(baseMockWeapon)
+      .mockResolvedValueOnce({ ...baseMockWeapon, _count: { versions: 2 } } as never)
+
+    const req = makeRequest('http://localhost/api/weapons/test-id/regenerate-image', {
+      method: 'POST',
+      body: JSON.stringify({ guidance: 'Make it darker' }),
+      headers: { 'Content-Type': 'application/json', 'Content-Length': '28' },
+    })
+    const res = await POST(req, { params: Promise.resolve({ id: 'test-id' }) })
+
+    expect(res.status).toBe(200)
+    expect(vi.mocked(regenerateImage)).toHaveBeenCalledWith('test-id', undefined, 'Make it darker')
+  })
 })

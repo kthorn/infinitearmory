@@ -11,6 +11,7 @@ interface RouteParams {
 
 const requestSchema = z.object({
   style: z.optional(styleSchema),
+  guidance: z.optional(z.string().min(1).max(1000)),
 })
 
 /**
@@ -20,14 +21,14 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
   try {
     const { id } = await params
 
-    // Parse optional body (empty body is OK, malformed JSON is not)
+    // Parse optional body
     let style: string | undefined
-    const contentLength = request.headers.get('content-length')
-    const hasBody = contentLength !== null && contentLength !== '0'
-    if (hasBody) {
+    let guidance: string | undefined
+    const text = await request.text()
+    if (text.trim()) {
       let body: unknown
       try {
-        body = await request.json()
+        body = JSON.parse(text)
       } catch {
         return badRequest('Invalid JSON body')
       }
@@ -36,6 +37,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
         return handleZodError(parsed.error)
       }
       style = parsed.data.style
+      guidance = parsed.data.guidance?.trim() || undefined
     }
 
     // Check weapon exists, has spec, and is not already generating
@@ -51,7 +53,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     }
 
     // Run regeneration (blocking for this endpoint)
-    await regenerateImage(id, style)
+    await regenerateImage(id, style, guidance)
 
     // Return updated weapon
     const updated = await db.weapon.findUnique({

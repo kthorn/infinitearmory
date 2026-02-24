@@ -60,4 +60,21 @@ describe('POST /api/weapons/:id/reroll-stats', () => {
 
     expect(res.status).toBe(409)
   })
+
+  it('accepts optional guidance in request body', async () => {
+    const { rerollWeapon } = await import('@/lib/generation')
+    vi.mocked(db.weapon.findUnique)
+      .mockResolvedValueOnce(baseMockWeapon)
+      .mockResolvedValueOnce({ ...baseMockWeapon, _count: { versions: 2 } } as never)
+
+    const req = makeRequest('http://localhost/api/weapons/test-id/reroll-stats', {
+      method: 'POST',
+      body: JSON.stringify({ guidance: 'Make it stronger' }),
+      headers: { 'Content-Type': 'application/json', 'Content-Length': '30' },
+    })
+    const res = await POST(req, { params: Promise.resolve({ id: 'test-id' }) })
+
+    expect(res.status).toBe(200)
+    expect(vi.mocked(rerollWeapon)).toHaveBeenCalledWith('test-id', 'Make it stronger')
+  })
 })
