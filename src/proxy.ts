@@ -26,7 +26,7 @@ const DYNAMIC_RATE_LIMITED_PATHS = [
   { pattern: /^POST:\/api\/weapons\/[\w-]+\/reroll-stats$/, limiter: 'rerollStats' as const },
 ]
 
-export function middleware(request: NextRequest) {
+export function proxy(request: NextRequest) {
   const path = request.nextUrl.pathname
 
   // Don't reset idle timer for health checks (Fly.io polls every 30s)
