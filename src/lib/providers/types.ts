@@ -8,6 +8,7 @@ export interface TextGenerationResult {
 
 export interface TextProvider {
   generateWeapon(prompt: string, options: GenerationOptions): Promise<TextGenerationResult>
+  generateRaw(prompt: string, options: GenerationOptions): Promise<TextGenerationResult>
 }
 
 export interface ImageGenerationResult {

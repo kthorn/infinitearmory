@@ -16,56 +16,62 @@ export function createAnthropicTextProvider(model?: string): TextProvider {
   const activeModel = model ?? DEFAULT_MODEL
   const client = new Anthropic({ apiKey: env.ANTHROPIC_API_KEY })
 
-  return {
-    async generateWeapon(prompt: string, options: GenerationOptions): Promise<TextGenerationResult> {
-      const userPrompt = buildWeaponPrompt(prompt, options)
+  async function callAndParse(finalPrompt: string): Promise<TextGenerationResult> {
+    const response = await client.messages.create({
+      model: activeModel,
+      max_tokens: 10000,
+      messages: [{ role: 'user', content: finalPrompt }],
+      system:
+        'You are a tabletop RPG game designer specializing in weapons, turrets, and mechs for both fantasy and sci-fi settings. Always respond with valid JSON only, no other text or markdown formatting.',
+    })
 
-      const response = await client.messages.create({
-        model: activeModel,
-        max_tokens: 10000,
-        messages: [{ role: 'user', content: userPrompt }],
-        system:
-          'You are a tabletop RPG game designer specializing in weapons, turrets, and mechs for both fantasy and sci-fi settings. Always respond with valid JSON only, no other text or markdown formatting.',
-      })
+    const textBlock = response.content.find((block) => block.type === 'text')
+    if (!textBlock || textBlock.type !== 'text') {
+      throw new Error('No text content in Anthropic response')
+    }
 
-      const textBlock = response.content.find((block) => block.type === 'text')
-      if (!textBlock || textBlock.type !== 'text') {
-        throw new Error('No text content in Anthropic response')
-      }
+    const content = stripCodeFences(textBlock.text)
 
-      const content = stripCodeFences(textBlock.text)
+    let parsed: unknown
+    try {
+      parsed = JSON.parse(content)
+    } catch (e) {
+      console.error(`[anthropic] JSON parse failed (model=${activeModel}):`, e instanceof Error ? e.message : e)
+      console.error(`[anthropic] Raw LLM response (${content.length} chars):\n${content}`)
+      parsed = await attemptRepair(client, activeModel, content, 'Invalid JSON syntax')
+    }
 
-      let parsed: unknown
-      try {
-        parsed = JSON.parse(content)
-      } catch (e) {
-        console.error(`[anthropic] JSON parse failed (model=${activeModel}):`, e instanceof Error ? e.message : e)
-        console.error(`[anthropic] Raw LLM response (${content.length} chars):\n${content}`)
-        parsed = await attemptRepair(client, activeModel, content, 'Invalid JSON syntax')
-      }
+    const validated = textGenerationResultSchema.safeParse(parsed)
+    if (!validated.success) {
+      const errorMsg = validated.error.issues.map((e) => `${e.path.join('.')}: ${e.message}`).join('; ')
+      parsed = await attemptRepair(client, activeModel, content, errorMsg)
 
-      const validated = textGenerationResultSchema.safeParse(parsed)
-      if (!validated.success) {
-        const errorMsg = validated.error.issues.map((e) => `${e.path.join('.')}: ${e.message}`).join('; ')
-        parsed = await attemptRepair(client, activeModel, content, errorMsg)
-
-        const revalidated = textGenerationResultSchema.safeParse(parsed)
-        if (!revalidated.success) {
-          throw new Error(`Schema validation failed after repair: ${revalidated.error.message}`)
-        }
-
-        return {
-          weaponSpec: revalidated.data.weaponSpec,
-          descriptionMd: revalidated.data.descriptionMd,
-          model: activeModel,
-        }
+      const revalidated = textGenerationResultSchema.safeParse(parsed)
+      if (!revalidated.success) {
+        throw new Error(`Schema validation failed after repair: ${revalidated.error.message}`)
       }
 
       return {
-        weaponSpec: validated.data.weaponSpec,
-        descriptionMd: validated.data.descriptionMd,
+        weaponSpec: revalidated.data.weaponSpec,
+        descriptionMd: revalidated.data.descriptionMd,
         model: activeModel,
       }
+    }
+
+    return {
+      weaponSpec: validated.data.weaponSpec,
+      descriptionMd: validated.data.descriptionMd,
+      model: activeModel,
+    }
+  }
+
+  return {
+    async generateWeapon(prompt: string, options: GenerationOptions): Promise<TextGenerationResult> {
+      const weaponPrompt = buildWeaponPrompt(prompt, options)
+      return callAndParse(weaponPrompt)
+    },
+    async generateRaw(prompt: string): Promise<TextGenerationResult> {
+      return callAndParse(prompt)
     },
   }
 }

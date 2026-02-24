@@ -13,4 +13,4 @@ export { getTextProvider } from './text'
 export { getImageProvider } from './image'
 
 // Prompts
-export { buildWeaponPrompt, buildRepairPrompt, buildImagePrompt } from './prompts'
+export { buildWeaponPrompt, buildRepairPrompt, buildImagePrompt, buildWeaponRefinementPrompt } from './prompts'

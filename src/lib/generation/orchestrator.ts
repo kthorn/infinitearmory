@@ -1,5 +1,5 @@
 import { db } from '@/lib/db'
-import { getTextProvider, getImageProvider, buildImagePrompt } from '@/lib/providers'
+import { getTextProvider, getImageProvider, buildImagePrompt, buildWeaponRefinementPrompt } from '@/lib/providers'
 import { safeResolveImageProvider } from '@/lib/models'
 import { uploadImage } from '@/lib/storage'
 import { generationOptionsSchema, weaponSpecSchema, styleSchema } from '@/lib/schemas'
@@ -94,7 +94,7 @@ export async function generateWeapon({ weaponId, userPrompt, options }: Generate
 /**
  * Regenerate just the image for an existing weapon
  */
-export async function regenerateImage(weaponId: string, style?: string): Promise<void> {
+export async function regenerateImage(weaponId: string, style?: string, guidance?: string): Promise<void> {
   const weapon = await db.weapon.findUnique({ where: { id: weaponId } })
   if (!weapon) {
     throw new Error(`Weapon not found: ${weaponId}`)
@@ -120,7 +120,8 @@ export async function regenerateImage(weaponId: string, style?: string): Promise
 
     const { model: imageModelId } = safeResolveImageProvider(options.imageModel)
     const imageProvider = getImageProvider(imageModelId)
-    const imagePrompt = buildImagePrompt(weaponSpec, imageStyle, weapon.userPrompt)
+    const previousImagePrompt = guidance?.trim() ? weapon.imagePrompt : undefined
+    const imagePrompt = buildImagePrompt(weaponSpec, imageStyle, weapon.userPrompt, guidance, previousImagePrompt ?? undefined)
 
     const imageResult = await withRetry(
       () => imageProvider.generateImage(imagePrompt),
@@ -148,7 +149,16 @@ export async function regenerateImage(weaponId: string, style?: string): Promise
     })
 
     // Create version snapshot
-    await createVersionAndActivate(weaponId)
+    const version = await createVersionAndActivate(weaponId)
+    if (guidance?.trim() && version) {
+      await db.weaponVersion.update({
+        where: { id: version.id },
+        data: {
+          refinementPrompt: guidance.trim(),
+          refinementType: 'image',
+        },
+      })
+    }
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error'
     await db.weapon.update({
@@ -165,7 +175,7 @@ export async function regenerateImage(weaponId: string, style?: string): Promise
 /**
  * Reroll stats and regenerate everything
  */
-export async function rerollWeapon(weaponId: string): Promise<void> {
+export async function rerollWeapon(weaponId: string, guidance?: string): Promise<void> {
   const weapon = await db.weapon.findUnique({ where: { id: weaponId } })
   if (!weapon) {
     throw new Error(`Weapon not found: ${weaponId}`)
@@ -176,6 +186,12 @@ export async function rerollWeapon(weaponId: string): Promise<void> {
     if (rawOptions && !rawOptions.category) rawOptions.category = 'fantasy_weapon'
     if (rawOptions?.ruleset === 'pathfinder2e' || rawOptions?.ruleset === 'generic') rawOptions.ruleset = 'dnd5e'
     const options = generationOptionsSchema.parse(rawOptions)
+
+    if (guidance?.trim()) {
+      // Refinement flow: use current spec + guidance to generate modified stats
+      await refineWeaponStats(weaponId, weapon, options, guidance.trim())
+      return
+    }
 
     // Clear existing results (including model metadata to prevent stale data)
     await db.weapon.update({
@@ -212,11 +228,74 @@ export async function rerollWeapon(weaponId: string): Promise<void> {
 }
 
 /**
+ * Refine weapon stats using guidance, preserving image.
+ */
+async function refineWeaponStats(
+  weaponId: string,
+  weapon: { userPrompt: string; weaponSpec: string | null; descriptionMd: string | null },
+  options: GenerationOptions,
+  guidance: string
+): Promise<void> {
+  if (!weapon.weaponSpec) {
+    throw new Error(`Weapon has no spec to refine: ${weaponId}`)
+  }
+
+  await updateStatus(weaponId, WEAPON_STATUS.GENERATING_TEXT)
+
+  const rawSpec = JSON.parse(weapon.weaponSpec)
+  if (rawSpec && !rawSpec.category) rawSpec.category = 'fantasy_weapon'
+  const category = rawSpec.category ?? 'fantasy_weapon'
+
+  const textProvider = getTextProvider(options.textModel)
+  const refinementPrompt = buildWeaponRefinementPrompt({
+    userPrompt: weapon.userPrompt,
+    currentSpec: weapon.weaponSpec,
+    currentDescription: weapon.descriptionMd ?? '',
+    guidance,
+    category,
+  })
+
+  // Use generateRaw to avoid double-wrapping with buildWeaponPrompt
+  const textResult = await withRetry(
+    () => textProvider.generateRaw(refinementPrompt, options),
+    {
+      maxAttempts: 2,
+      delayMs: 2000,
+      shouldRetry: isTransientError,
+    }
+  )
+
+  // Save refined text results, preserve existing image
+  await db.weapon.update({
+    where: { id: weaponId },
+    data: {
+      weaponSpec: JSON.stringify(textResult.weaponSpec),
+      descriptionMd: textResult.descriptionMd,
+      textModel: textResult.model,
+      promptVersion: PROMPT_VERSION,
+      status: WEAPON_STATUS.DONE,
+    },
+  })
+
+  // Create version snapshot with refinement metadata
+  const version = await createVersionAndActivate(weaponId)
+  if (version) {
+    await db.weaponVersion.update({
+      where: { id: version.id },
+      data: {
+        refinementPrompt: guidance,
+        refinementType: 'stats',
+      },
+    })
+  }
+}
+
+/**
  * Create a new version snapshot and set it as active on the weapon.
  */
-async function createVersionAndActivate(weaponId: string): Promise<void> {
+async function createVersionAndActivate(weaponId: string): Promise<{ id: string } | null> {
   const weapon = await db.weapon.findUnique({ where: { id: weaponId } })
-  if (!weapon) return
+  if (!weapon) return null
 
   // Determine next version number
   const lastVersion = await db.weaponVersion.findFirst({
@@ -242,6 +321,8 @@ async function createVersionAndActivate(weaponId: string): Promise<void> {
     where: { id: weaponId },
     data: { activeVersionId: version.id },
   })
+
+  return version
 }
 
 async function updateStatus(weaponId: string, status: (typeof WEAPON_STATUS)[keyof typeof WEAPON_STATUS]): Promise<void> {
