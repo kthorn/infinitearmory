@@ -1,13 +1,16 @@
 import type { WeaponSpec, Style } from '@/lib/schemas'
 
-export function buildImagePrompt(weaponSpec: WeaponSpec, style: Style, userPrompt?: string): string {
+export function buildImagePrompt(weaponSpec: WeaponSpec, style: Style, userPrompt?: string, guidance?: string, previousImagePrompt?: string): string {
   const styleInstructions = getStyleInstructions(style)
   const weaponDescription = buildWeaponDescription(weaponSpec)
   const trimmedPrompt = userPrompt?.trim()
   const userVisionSection = trimmedPrompt ? `\n\nUser's vision: ${trimmedPrompt}` : ''
   const framing = getFramingInstructions(weaponSpec.category)
+  const trimmedGuidance = guidance?.trim()
+  const guidanceSection = trimmedGuidance ? `\n\nRefinement guidance: ${trimmedGuidance}` : ''
+  const priorContext = previousImagePrompt?.trim() ? `\n\nPrevious image description: ${previousImagePrompt.trim()}` : ''
 
-  return `${styleInstructions}${userVisionSection}
+  return `${styleInstructions}${userVisionSection}${priorContext}${guidanceSection}
 
 A detailed illustration of ${weaponDescription}
 
