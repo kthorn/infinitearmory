@@ -91,7 +91,7 @@ export const mechSpecSchema = z.object({
     speed: z.number().int().min(1).max(20),
     jumpJets: z.boolean(),
   }),
-  weaponSystems: z.array(mechWeaponSystemSchema).min(1).max(6),
+  weaponSystems: z.array(mechWeaponSystemSchema).min(1).max(10),
   specialSystems: z.array(z.string().min(1).max(100)).default([]),
 })
 
@@ -165,7 +165,7 @@ export const MECH_SCHEMA_DESCRIPTION = `{
   "armorRating": number (1-500),
   "heatCapacity": number (1-50),
   "mobility": { "speed": number (1-20), "jumpJets": boolean },
-  "weaponSystems": [{ "name": "string", "damage": { "dice": "XdY", "type": "damage type" }, "location": "string (e.g., 'left arm', 'right torso')", "heatGenerated": number (0-20) }] (1-6 weapon systems, min 1 required),
+  "weaponSystems": [{ "name": "string", "damage": { "dice": "XdY", "type": "damage type" }, "location": "string (e.g., 'left arm', 'right torso')", "heatGenerated": number (0-20) }] (1-10 weapon systems, min 1 required),
   "specialSystems": ["string"] (e.g., "ECM Suite", "Targeting Computer"),
   "damage": { "dice": "XdY", "type": "damage type" } (primary damage, should match first weaponSystems entry),
   "effects": [{ "trigger": "on_hit" | "on_crit" | "activated" | "passive" | "on_overheat", "description": "string" }] (max 10),
