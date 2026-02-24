@@ -115,6 +115,9 @@ export async function regenerateImage(weaponId: string, style?: string, guidance
   const options = generationOptionsSchema.parse(rawOptions)
   const imageStyle = style ? styleSchema.parse(style) : options.style ?? 'fantasy_art'
 
+  // Ensure pre-versioning weapons get a baseline version before modification
+  await ensureBaselineVersion(weaponId)
+
   try {
     await updateStatus(weaponId, WEAPON_STATUS.GENERATING_IMAGE)
 
@@ -186,6 +189,9 @@ export async function rerollWeapon(weaponId: string, guidance?: string): Promise
     if (rawOptions && !rawOptions.category) rawOptions.category = 'fantasy_weapon'
     if (rawOptions?.ruleset === 'pathfinder2e' || rawOptions?.ruleset === 'generic') rawOptions.ruleset = 'dnd5e'
     const options = generationOptionsSchema.parse(rawOptions)
+
+    // Ensure pre-versioning weapons get a baseline version before modification
+    await ensureBaselineVersion(weaponId)
 
     if (guidance?.trim()) {
       // Refinement flow: use current spec + guidance to generate modified stats
@@ -293,6 +299,36 @@ async function refineWeaponStats(
 /**
  * Create a new version snapshot and set it as active on the weapon.
  */
+/**
+ * Ensure a baseline version exists for weapons created before the versioning system.
+ * Call this BEFORE modifying the weapon so the original state is preserved.
+ */
+async function ensureBaselineVersion(weaponId: string): Promise<void> {
+  const versionCount = await db.weaponVersion.count({ where: { weaponId } })
+  if (versionCount > 0) return
+
+  const weapon = await db.weapon.findUnique({ where: { id: weaponId } })
+  if (!weapon || !weapon.weaponSpec) return
+
+  const version = await db.weaponVersion.create({
+    data: {
+      weaponId,
+      versionNumber: 1,
+      descriptionMd: weapon.descriptionMd,
+      weaponSpec: weapon.weaponSpec,
+      imageUrl: weapon.imageUrl,
+      imagePrompt: weapon.imagePrompt,
+      textModel: weapon.textModel,
+      imageModel: weapon.imageModel,
+    },
+  })
+
+  await db.weapon.update({
+    where: { id: weaponId },
+    data: { activeVersionId: version.id },
+  })
+}
+
 async function createVersionAndActivate(weaponId: string): Promise<{ id: string } | null> {
   const weapon = await db.weapon.findUnique({ where: { id: weaponId } })
   if (!weapon) return null
