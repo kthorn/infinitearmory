@@ -79,6 +79,8 @@ export function toWeaponVersionResponse(version: WeaponVersionRow): WeaponVersio
     imageUrl: version.imageUrl,
     textModel: version.textModel ?? null,
     imageModel: version.imageModel ?? null,
+    refinementPrompt: version.refinementPrompt ?? null,
+    refinementType: version.refinementType as WeaponVersion['refinementType'] ?? null,
   }
 }
 

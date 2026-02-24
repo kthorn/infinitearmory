@@ -57,6 +57,10 @@ model WeaponVersion {
   textModel     String?
   imageModel    String?
 
+  // Refinement metadata
+  refinementPrompt String?  // User's guidance text that produced this version
+  refinementType   String?  // "stats" | "image" | null (null = initial gen or blind reroll)
+
   @@unique([weaponId, versionNumber])
   @@index([weaponId])
 }

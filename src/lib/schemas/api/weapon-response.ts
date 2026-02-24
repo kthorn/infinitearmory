@@ -29,6 +29,8 @@ export const weaponVersionSchema = z.object({
   imageUrl: z.nullable(z.string()),
   textModel: z.nullable(z.string()),
   imageModel: z.nullable(z.string()),
+  refinementPrompt: z.nullable(z.string()),
+  refinementType: z.nullable(z.enum(['stats', 'image'])),
 })
 
 export type WeaponVersion = z.infer<typeof weaponVersionSchema>
