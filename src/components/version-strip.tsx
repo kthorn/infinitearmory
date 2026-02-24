@@ -74,11 +74,21 @@ export function VersionStrip({ versions, activeVersionId, onPromote, onDelete }:
                   {isActive && (
                     <span className="ml-1 text-xs text-indigo-400">✓</span>
                   )}
+                  {version.refinementType && (
+                    <span className="ml-1 text-xs text-amber-400" title={version.refinementPrompt ?? 'Refined'}>
+                      ✎
+                    </span>
+                  )}
                 </div>
 
                 {/* Hover actions (non-active versions only) */}
                 {!isActive && (
                   <div className="absolute inset-0 bg-slate-900/80 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-1">
+                    {version.refinementPrompt && (
+                      <p className="text-[10px] text-amber-300 px-1 text-center line-clamp-2 mb-0.5">
+                        &ldquo;{version.refinementPrompt}&rdquo;
+                      </p>
+                    )}
                     <button
                       type="button"
                       onClick={() => handlePromote(version.id)}
