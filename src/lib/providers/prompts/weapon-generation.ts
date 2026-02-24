@@ -155,6 +155,67 @@ function getRarityInstruction(options: GenerationOptions): string {
     : 'Choose an appropriate rarity based on the concept.'
 }
 
+export interface RefinementPromptArgs {
+  userPrompt: string
+  currentSpec: string       // JSON string of current weaponSpec
+  currentDescription: string
+  guidance: string
+  category: 'fantasy_weapon' | 'scifi_handheld' | 'scifi_turret' | 'mech'
+}
+
+export function buildWeaponRefinementPrompt(args: RefinementPromptArgs): string {
+  const { userPrompt, currentSpec, currentDescription, guidance, category } = args
+  const schemaDescription = getSchemaDescriptionForCategory(category)
+
+  return `You are refining an existing weapon based on user feedback. Modify the weapon according to the guidance below. Preserve all fields and values that are not explicitly mentioned in the guidance.
+
+ORIGINAL USER CONCEPT:
+${userPrompt}
+
+CURRENT WEAPON SPEC (JSON):
+${currentSpec}
+
+CURRENT DESCRIPTION:
+${currentDescription}
+
+USER'S REFINEMENT GUIDANCE:
+${guidance}
+
+INSTRUCTIONS:
+- Apply the requested changes to the weapon
+- Preserve everything not mentioned in the guidance — do not change fields the user did not ask about
+- Keep the same category and general identity of the weapon
+- Update the description to reflect any changes, but preserve the tone and style
+- The output must conform exactly to the schema below
+
+OUTPUT FORMAT:
+Return a JSON object with exactly this structure:
+{
+  "weaponSpec": ${schemaDescription},
+  "descriptionMd": "Updated markdown flavor text reflecting the changes."
+}
+
+IMPORTANT:
+- Return ONLY valid JSON, no other text
+- All string values must be properly escaped
+- Keep the ENTIRE response under 4000 characters to ensure valid JSON output`
+}
+
+function getSchemaDescriptionForCategory(category: string): string {
+  switch (category) {
+    case 'fantasy_weapon':
+      return FANTASY_WEAPON_SCHEMA_DESCRIPTION
+    case 'scifi_handheld':
+      return SCIFI_HANDHELD_SCHEMA_DESCRIPTION
+    case 'scifi_turret':
+      return TURRET_SCHEMA_DESCRIPTION
+    case 'mech':
+      return MECH_SCHEMA_DESCRIPTION
+    default:
+      return FANTASY_WEAPON_SCHEMA_DESCRIPTION
+  }
+}
+
 export function buildRepairPrompt(invalidJson: string, error: string): string {
   return `The following JSON is invalid and needs to be fixed:
 
