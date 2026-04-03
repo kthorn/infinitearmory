@@ -139,21 +139,23 @@ export function WeaponForm() {
                 className="w-full px-4 py-3 pb-10 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent min-h-[100px] resize-y"
                 required
                 minLength={3}
-                maxLength={2000}
+                maxLength={5000}
               />
               <div className="absolute bottom-2 right-2">
                 <MicrophoneButton
                   onTranscription={(text) => {
                     setPrompt((prev) => {
                       const combined = prev ? `${prev} ${text}` : text
-                      return combined.slice(0, 2000)
+                      return combined.slice(0, 5000)
                     })
                   }}
                   disabled={loading}
                 />
               </div>
             </div>
-            <p className="mt-1 text-sm text-slate-500">{prompt.length}/2000 characters</p>
+            <p className={`mt-1 text-sm ${prompt.length > 5000 ? 'text-red-400' : 'text-slate-500'}`}>
+              {prompt.length}/5000 characters{prompt.length > 5000 && ' — please shorten your prompt'}
+            </p>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
