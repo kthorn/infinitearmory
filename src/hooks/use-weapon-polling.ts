@@ -3,6 +3,8 @@
 import { useState, useEffect, useCallback } from 'react'
 import type { WeaponResponse } from '@/lib/schemas'
 
+const STALE_GENERATION_MS = 3 * 60 * 1000 // 3 minutes
+
 interface UseWeaponPollingOptions {
   initialWeapon: WeaponResponse
   pollInterval?: number
@@ -46,6 +48,16 @@ export function useWeaponPolling({
       }
       const data = await response.json()
       if (!signal?.aborted) {
+        // Detect stuck generations: if status is generating but updatedAt is stale, treat as error
+        const isGenerating = data.status !== 'done' && data.status !== 'error'
+        if (isGenerating && data.updatedAt) {
+          const staleMs = Date.now() - new Date(data.updatedAt).getTime()
+          if (staleMs > STALE_GENERATION_MS) {
+            setWeapon({ ...data, status: 'error' as const })
+            setError('Generation appears to have stalled. Please try again.')
+            return
+          }
+        }
         setWeapon(data)
         setError(null)
       }

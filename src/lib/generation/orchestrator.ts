@@ -5,6 +5,7 @@ import { uploadImage } from '@/lib/storage'
 import { generationOptionsSchema, weaponSpecSchema, styleSchema } from '@/lib/schemas'
 import { WEAPON_STATUS } from '@/types'
 import { withRetry, isTransientError } from './retry'
+import { incrementInFlight, decrementInFlight } from './in-flight'
 import type { GenerationOptions } from '@/lib/schemas'
 
 const PROMPT_VERSION = 'v1'
@@ -20,6 +21,7 @@ export interface GenerateWeaponParams {
  * Updates database status at each step
  */
 export async function generateWeapon({ weaponId, userPrompt, options }: GenerateWeaponParams): Promise<void> {
+  incrementInFlight()
   try {
     // Step 1: Generate text (description + stats)
     await updateStatus(weaponId, WEAPON_STATUS.GENERATING_TEXT)
@@ -88,6 +90,8 @@ export async function generateWeapon({ weaponId, userPrompt, options }: Generate
 
     // Re-throw for logging
     throw error
+  } finally {
+    decrementInFlight()
   }
 }
 
@@ -118,6 +122,7 @@ export async function regenerateImage(weaponId: string, style?: string, guidance
   // Ensure pre-versioning weapons get a baseline version before modification
   await ensureBaselineVersion(weaponId)
 
+  incrementInFlight()
   try {
     await updateStatus(weaponId, WEAPON_STATUS.GENERATING_IMAGE)
 
@@ -172,6 +177,8 @@ export async function regenerateImage(weaponId: string, style?: string, guidance
       },
     })
     throw error
+  } finally {
+    decrementInFlight()
   }
 }
 
@@ -246,53 +253,58 @@ async function refineWeaponStats(
     throw new Error(`Weapon has no spec to refine: ${weaponId}`)
   }
 
-  await updateStatus(weaponId, WEAPON_STATUS.GENERATING_TEXT)
+  incrementInFlight()
+  try {
+    await updateStatus(weaponId, WEAPON_STATUS.GENERATING_TEXT)
 
-  const rawSpec = JSON.parse(weapon.weaponSpec)
-  if (rawSpec && !rawSpec.category) rawSpec.category = 'fantasy_weapon'
-  const category = rawSpec.category ?? 'fantasy_weapon'
+    const rawSpec = JSON.parse(weapon.weaponSpec)
+    if (rawSpec && !rawSpec.category) rawSpec.category = 'fantasy_weapon'
+    const category = rawSpec.category ?? 'fantasy_weapon'
 
-  const textProvider = getTextProvider(options.textModel)
-  const refinementPrompt = buildWeaponRefinementPrompt({
-    userPrompt: weapon.userPrompt,
-    currentSpec: weapon.weaponSpec,
-    currentDescription: weapon.descriptionMd ?? '',
-    guidance,
-    category,
-  })
+    const textProvider = getTextProvider(options.textModel)
+    const refinementPrompt = buildWeaponRefinementPrompt({
+      userPrompt: weapon.userPrompt,
+      currentSpec: weapon.weaponSpec,
+      currentDescription: weapon.descriptionMd ?? '',
+      guidance,
+      category,
+    })
 
-  // Use generateRaw to avoid double-wrapping with buildWeaponPrompt
-  const textResult = await withRetry(
-    () => textProvider.generateRaw(refinementPrompt, options),
-    {
-      maxAttempts: 2,
-      delayMs: 2000,
-      shouldRetry: isTransientError,
-    }
-  )
+    // Use generateRaw to avoid double-wrapping with buildWeaponPrompt
+    const textResult = await withRetry(
+      () => textProvider.generateRaw(refinementPrompt, options),
+      {
+        maxAttempts: 2,
+        delayMs: 2000,
+        shouldRetry: isTransientError,
+      }
+    )
 
-  // Save refined text results, preserve existing image
-  await db.weapon.update({
-    where: { id: weaponId },
-    data: {
-      weaponSpec: JSON.stringify(textResult.weaponSpec),
-      descriptionMd: textResult.descriptionMd,
-      textModel: textResult.model,
-      promptVersion: PROMPT_VERSION,
-      status: WEAPON_STATUS.DONE,
-    },
-  })
-
-  // Create version snapshot with refinement metadata
-  const version = await createVersionAndActivate(weaponId)
-  if (version) {
-    await db.weaponVersion.update({
-      where: { id: version.id },
+    // Save refined text results, preserve existing image
+    await db.weapon.update({
+      where: { id: weaponId },
       data: {
-        refinementPrompt: guidance,
-        refinementType: 'stats',
+        weaponSpec: JSON.stringify(textResult.weaponSpec),
+        descriptionMd: textResult.descriptionMd,
+        textModel: textResult.model,
+        promptVersion: PROMPT_VERSION,
+        status: WEAPON_STATUS.DONE,
       },
     })
+
+    // Create version snapshot with refinement metadata
+    const version = await createVersionAndActivate(weaponId)
+    if (version) {
+      await db.weaponVersion.update({
+        where: { id: version.id },
+        data: {
+          refinementPrompt: guidance,
+          refinementType: 'stats',
+        },
+      })
+    }
+  } finally {
+    decrementInFlight()
   }
 }
 
